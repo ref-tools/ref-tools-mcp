@@ -1,47 +1,69 @@
-# Ref MCP Server
 
-A [ModelContextProtocol](https://modelcontextprotocol.io) that gives your AI coding tool or agent access to documentation for APIs, services, libraries etc.
+![Ref Logo](ref.png)
 
-## Features
+# Ref MCP
 
-The server providest tools:
+A [ModelContextProtocol](https://modelcontextprotocol.io) server that gives your AI coding tool or agent access to documentation for APIs, services, libraries etc. It's your one-stop-shop to keep your agent up-to-date on documentation in a fast and token-efficient way.
 
-- `search`: Search for documentation related to your specific stack. 
-- `stack`: Read your project directory so that `search` references documentation for exactly your stack. (Not intended for users to invoke, just visible for demo purposes)
+For more see info [ref.tools](https://ref.tools)
 
-## Setup with Claude
+## Setup
 
-1. Download and install Claude desktop app from [claude.ai/download](https://claude.ai/download)
+There are two options for setting up Ref as an MCP server, either via the streamable-http server (recommended) or local stdio server (legacy). 
 
-2. Configure Claude to use this MCP server. If this is your first MCP server, run:
+⚠️ This repo contains the legacy stdio server. 
 
-```bash
-echo '{
-  "mcpServers": {
-    "ref": {
-      "command": "npx",
-      "args": ["ref-tools-mcp"],
-      "env": {
-        "STACK_DIR": "<absolute path to the project codebase>"
-      }
-    }
+### Streamable HTTP (Recommended)
+
+```
+"Ref": {
+    "command": "npx",
+    "args": [
+      "mcp-remote@next",
+      "https://api.ref.tools/mcp"
+      "--header",
+      "x-ref-alpha:<sign up to get an auth token>"
+    ]
   }
-}' > ~/Library/Application\ Support/Claude/claude_desktop_config.json
+}
 ```
 
-If you have existing MCP servers, add the `mcp-starter` block to your existing config.
+As of April 2025, MCP supports streamable HTTP servers. Ref implements this but not all clients support it yet so the most reliable approach is to use mcp-remote as a local proxy. If you know your client supports streamable HTTP servers, feel free to use https://api.ref.tools/mcp directly.
 
-3. Restart Claude Desktop.
+### stdio (Legacy)
 
-4. Look for the hammer icon with the number of available tools in Claude's interface to confirm the server is running.
+```
+"Ref": {
+  "command": "npx",
+  "args": ["ref-tools-mcp"],
+  "env": {
+    REF_ALPHA: <sign up to get an auth token>,
+  }
+}
+```
 
-## Development Setup
+## Tools
 
-Run the Ref local dev stack including Firebase emulator from the root of the repo with `npm run dev -- ref`
+Ref MCP server provides all the documentation related tools for your agent needs.
 
-Then get the base url for emulator Firebase function (eg `http://127.0.0.1:5001/ref-dev-mjd/us-central1/`) set that as `env.REF_URL` 
+### ref_search_documentation
 
-See `ref-tools` docs for how to index files to the local stack.
+A powerful search tool to check technical documentation. Use this tool whenever you need information about any technical platform, framework, API, service, database, or library. It searches through relevant documentation and finds exactly what you need, down to the specific section of the page.
+
+### ref_search_web
+
+A fallback web search tool to cover cases when ref_search_documentation doesn't find what you need. It will find links to relevant pages on the web and the ref_read_url tool can be used to read the relevant ones.
+
+### ref_read_url
+
+A tool to read the full content of a web page. This allows your agent to follow links in documentation and web searches.
+
+## Development
+
+```
+npm install
+npm run dev
+```
 
 ### Running with Inspector
 
@@ -74,3 +96,7 @@ npm run build
 ```bash
 npm run watch
 ```
+
+## License
+
+MIT
