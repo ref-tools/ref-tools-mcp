@@ -1,0 +1,32 @@
+{
+  "name": "ref-tools-mcp",
+  "version": "0.11.0",
+  "description": "ModelContextProtocol server for Ref",
+  "type": "module",
+  "scripts": {
+    "make-executable": "node -e \"fs.chmodSync('dist/index.cjs', '755');\" --require fs",
+    "build": "esbuild index.ts --outfile=dist/index.cjs --bundle --platform=node --format=cjs --banner:js='#!/usr/bin/env node' && npm run make-executable",
+    "watch": "esbuild index.ts --outfile=dist/index.cjs --bundle --platform=node --format=cjs --banner:js='#!/usr/bin/env node' --watch",
+    "inspect": "npx @modelcontextprotocol/inspector node dist/index.cjs",
+    "dev": "concurrently \"npm run watch\" \"npm run inspect\"",
+    "check": "tsc --noEmit",
+    "pre-commit": "npm run check"
+  },
+  "bin": {
+    "ref-tools-mcp": "./dist/index.cjs"
+  },
+  "files": [
+    "dist"
+  ],
+  "dependencies": {
+    "@modelcontextprotocol/inspector": "^0.10.2",
+    "@modelcontextprotocol/sdk": "^1.0.3"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.1",
+    "concurrently": "^8.2.2",
+    "esbuild": "^0.24.0",
+    "prettier": "^3.4.2",
+    "typescript": "^5.3.3"
+  }
+}
