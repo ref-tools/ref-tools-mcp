@@ -9,28 +9,11 @@ For more see info [ref.tools](https://ref.tools)
 
 ## Setup
 
-There are two options for setting up Ref as an MCP server, either via the streamable-http server (recommended) or local stdio server (legacy). 
+There are two options for setting up Ref as an MCP server, either via the streamable-http server (experimental) or local stdio server. 
 
-⚠️ This repo contains the legacy stdio server. 
+This repo contains the legacy stdio server. 
 
-### Streamable HTTP (Recommended)
-
-```
-"Ref": {
-    "command": "npx",
-    "args": [
-      "mcp-remote@next",
-      "https://api.ref.tools/mcp"
-      "--header",
-      "x-ref-alpha:<sign up to get an auth token>"
-    ]
-  }
-}
-```
-
-As of April 2025, MCP supports streamable HTTP servers. Ref implements this but not all clients support it yet so the most reliable approach is to use mcp-remote as a local proxy. If you know your client supports streamable HTTP servers, feel free to use https://api.ref.tools/mcp directly.
-
-### stdio (Legacy)
+### stdio 
 
 ```
 "Ref": {
@@ -41,6 +24,25 @@ As of April 2025, MCP supports streamable HTTP servers. Ref implements this but 
   }
 }
 ```
+
+### Streamable HTTP (experimental)
+
+```
+"Ref": {
+    "command": "npx",
+    "args": [
+      "-y",
+      "mcp-remote@0.1.0-0",
+      "https://api.ref.tools/mcp"
+      "--header",
+      "x-ref-alpha:<sign up to get an auth token>"
+    ]
+  }
+}
+```
+
+As of April 2025, MCP supports streamable HTTP servers. Ref implements this but not all clients support it yet so the most reliable approach is to use `mcp-remote` as a local proxy. If you know your client supports streamable HTTP servers, feel free to use https://api.ref.tools/mcp directly.
+
 
 ## Tools
 
