@@ -11,6 +11,7 @@ import {
   McpError,
   type Tool
 } from "@modelcontextprotocol/sdk/types.js";
+import axios from "axios";
 
 const server = new Server(
   {
@@ -100,31 +101,41 @@ async function doSearch(query: string) {
     };
   }
 
-  const response = await fetch(url, {
-    headers: {
-      'X-Ref-Alpha': process.env.REF_ALPHA,
-    },
-  });
-  const data = await response.json();
+  try {
+    const response = await axios.get(url, {
+      headers: {
+        'X-Ref-Alpha': process.env.REF_ALPHA,
+      },
+    });
+    const data = response.data;
 
-  if (data.docs.length === 0) {
+    if (data.docs.length === 0) {
+      return {
+        content: [{ type: "text", text: "No results found" }],
+      };
+    }
+
     return {
-      content: [{ type: "text", text: "No results found" }],
+      content: [
+        {
+          type: "text",
+          text: `Found ${data.docs.length} results for ${query} from ${getRefUrl()}\n\n${data.docs.map((result: any) => result.url).join("\n")}`
+        },
+        ...data.docs.map((result: any) => ({
+          type: "text",
+          text: JSON.stringify(result)
+        }))
+      ]
+    };
+  } catch (error) {
+    console.error("[search-error]", error);
+    return {
+      content: [{ 
+        type: "text", 
+        text: `Error during documentation search: ${axios.isAxiosError(error) ? error.message : (error as Error).message}` 
+      }],
     };
   }
-
-  return {
-    content: [
-      {
-        type: "text",
-        text: `Found ${data.docs.length} results for ${query} from ${getRefUrl()}\n\n${data.docs.map((result: any) => result.url).join("\n")}`
-      },
-      ...data.docs.map((result: any) => ({
-        type: "text",
-        text: JSON.stringify(result)
-      }))
-    ]
-  };
 }
 
 async function doSearchWeb(query: string) {
@@ -138,22 +149,13 @@ async function doSearchWeb(query: string) {
       };
     }
 
-    const response = await fetch(searchWebUrl, {
+    const response = await axios.get(searchWebUrl, {
       headers: {
         'X-Ref-Alpha': process.env.REF_ALPHA,
       },
     });
 
-    if (!response.ok) {
-      return {
-        content: [{ 
-          type: "text", 
-          text: `Error performing web search: ${response.status} ${response.statusText}` 
-        }],
-      };
-    }
-
-    const data = await response.json();
+    const data = response.data;
     
     if (!data.docs || data.docs.length === 0) {
       return {
@@ -174,7 +176,7 @@ async function doSearchWeb(query: string) {
     return {
       content: [{ 
         type: "text", 
-        text: `Error during web search: ${(error as Error).message}` 
+        text: `Error during web search: ${axios.isAxiosError(error) ? error.message : (error as Error).message}` 
       }],
     };
   }
@@ -191,22 +193,13 @@ async function doRead(url: string) {
       };
     }
 
-    const response = await fetch(readUrl, {
+    const response = await axios.get(readUrl, {
       headers: {
         'X-Ref-Alpha': process.env.REF_ALPHA,
       },
     });
 
-    if (!response.ok) {
-      return {
-        content: [{ 
-          type: "text", 
-          text: `Error fetching content: ${response.status} ${response.statusText}` 
-        }],
-      };
-    }
-
-    const data = await response.json();
+    const data = response.data;
     
     return {
       content: [{ 
@@ -220,7 +213,7 @@ async function doRead(url: string) {
     return {
       content: [{ 
         type: "text", 
-        text: `Error reading URL: ${(error as Error).message}` 
+        text: `Error reading URL: ${axios.isAxiosError(error) ? error.message : (error as Error).message}` 
       }],
     };
   }
