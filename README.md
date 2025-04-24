@@ -1,5 +1,5 @@
 
-[![Ref Logo](ref.png)](https://ref.tools)
+[![Documentation for your agent](header.png)](https://ref.tools)
 
 # Ref MCP
 
