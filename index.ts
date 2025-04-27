@@ -79,7 +79,10 @@ This is powerful when used in conjunction with the ref_search_documentation or r
 }
 
 server.setRequestHandler(ListToolsRequestSchema, async () => ({
-  tools: [SEARCH_DOCUMENTATION_TOOL, READ_TOOL, SEARCH_WEB_TOOL],
+  tools:
+    process.env.DISABLE_SEARCH_WEB === 'true'
+      ? [SEARCH_DOCUMENTATION_TOOL, READ_TOOL]
+      : [SEARCH_DOCUMENTATION_TOOL, READ_TOOL, SEARCH_WEB_TOOL],
 }))
 
 const getRefUrl = () => {

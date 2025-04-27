@@ -52,13 +52,15 @@ Ref MCP server provides all the documentation related tools for your agent needs
 
 A powerful search tool to check technical documentation. Use this tool whenever you need information about any technical platform, framework, API, service, database, or library. It searches through relevant documentation and finds exactly what you need, down to the specific section of the page.
 
-### ref_search_web
-
-A fallback web search tool to cover cases when ref_search_documentation doesn't find what you need. It will find links to relevant pages on the web and the ref_read_url tool can be used to read the relevant ones.
-
 ### ref_read_url
 
 A tool to read the full content of a web page. This allows your agent to follow links in documentation and web searches.
+
+### ref_search_web (optional)
+
+A fallback web search tool to cover cases when ref_search_documentation doesn't find what you need. It will find links to relevant pages on the web and the ref_read_url tool can be used to read the relevant ones.
+
+We include this tool so that Ref can cover all your search needs in one MCP server but if you prefer another search provider you can disable ref_search_web by setting theREF_SEARCH_WEB environment variable to false or by setting theallow_search_web=false url param in the streamable-http server.
 
 ## Development
 
