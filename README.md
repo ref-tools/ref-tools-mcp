@@ -58,9 +58,9 @@ A tool to read the full content of a web page. This allows your agent to follow 
 
 ### ref_search_web (optional)
 
-A fallback web search tool to cover cases when ref_search_documentation doesn't find what you need. It will find links to relevant pages on the web and the ref_read_url tool can be used to read the relevant ones.
+A fallback web search tool to cover cases when `ref_search_documentation` doesn't find what you need. It will find links to relevant pages on the web and the `ref_read_url` tool can be used to read the relevant ones.
 
-We include this tool so that Ref can cover all your search needs in one MCP server but if you prefer another search provider you can disable ref_search_web by setting theREF_SEARCH_WEB environment variable to false or by setting theallow_search_web=false url param in the streamable-http server.
+We include this tool so that Ref can cover all your search needs in one MCP server but if you prefer another search provider you can disable `ref_search_web` by setting the `DISABLE_SEARCH_WEB` environment variable to `true` or by setting the `disable_search_web=false` url param in the streamable-http server.
 
 ## Development
 
