@@ -102,7 +102,7 @@ async function doSearch(query: string) {
     (moduleNames ? '&moduleNames=' + moduleNames?.join(',') : '')
   console.error('[search]', url)
 
-  if (!process.env.REF_ALPHA) {
+  if (!process.env.REF_ALPHA && !process.env.REF_API_KEY) {
     return {
       content: [
         {
@@ -117,6 +117,7 @@ async function doSearch(query: string) {
     const response = await axios.get(url, {
       headers: {
         'X-Ref-Alpha': process.env.REF_ALPHA,
+        'X-Ref-Api-Key': process.env.REF_API_KEY,
       },
     })
     const data = response.data
@@ -157,7 +158,7 @@ async function doSearchWeb(query: string) {
     const searchWebUrl = getRefUrl() + '/search_web?query=' + encodeURIComponent(query)
     console.error('[search_web]', searchWebUrl)
 
-    if (!process.env.REF_ALPHA) {
+    if (!process.env.REF_ALPHA && !process.env.REF_API_KEY) {
       return {
         content: [
           {
@@ -171,6 +172,7 @@ async function doSearchWeb(query: string) {
     const response = await axios.get(searchWebUrl, {
       headers: {
         'X-Ref-Alpha': process.env.REF_ALPHA,
+        'X-Ref-Api-Key': process.env.REF_API_KEY,
       },
     })
 
@@ -210,7 +212,7 @@ async function doRead(url: string) {
     const readUrl = getRefUrl() + '/read?url=' + encodeURIComponent(url)
     console.error('[read]', readUrl)
 
-    if (!process.env.REF_ALPHA) {
+    if (!process.env.REF_ALPHA && !process.env.REF_API_KEY) {
       return {
         content: [
           {
@@ -224,6 +226,7 @@ async function doRead(url: string) {
     const response = await axios.get(readUrl, {
       headers: {
         'X-Ref-Alpha': process.env.REF_ALPHA,
+        'X-Ref-Api-Key': process.env.REF_API_KEY,
       },
     })
 

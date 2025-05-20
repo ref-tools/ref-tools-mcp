@@ -20,7 +20,7 @@ This repo contains the legacy stdio server.
   "command": "npx",
   "args": ["ref-tools-mcp"],
   "env": {
-    REF_ALPHA: <sign up to get an auth token>,
+    REF_API_KEY: <sign up to get an api key>
   }
 }
 ```
@@ -35,7 +35,7 @@ This repo contains the legacy stdio server.
       "mcp-remote@0.1.0-0",
       "https://api.ref.tools/mcp"
       "--header",
-      "x-ref-alpha:<sign up to get an auth token>"
+      "x-ref-api-key:<sign up to get an api key>"
     ]
   }
 }
@@ -43,6 +43,7 @@ This repo contains the legacy stdio server.
 
 As of April 2025, MCP supports streamable HTTP servers. Ref implements this but not all clients support it yet so the most reliable approach is to use `mcp-remote` as a local proxy. If you know your client supports streamable HTTP servers, feel free to use https://api.ref.tools/mcp directly.
 
+Note for former alpha users: `REF_ALPHA` config is still supported. You'll be notified if you need to update.
 
 ## Tools
 
