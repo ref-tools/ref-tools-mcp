@@ -20,7 +20,7 @@ This repo contains the legacy stdio server.
   "command": "npx",
   "args": ["ref-tools-mcp"],
   "env": {
-    REF_API_KEY: <sign up to get an api key>
+    "REF_API_KEY": <sign up to get an api key>
   }
 }
 ```
