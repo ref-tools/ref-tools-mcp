@@ -1,6 +1,6 @@
 {
   "name": "ref-tools-mcp",
-  "version": "0.15.0",
+  "version": "0.16.0",
   "description": "ModelContextProtocol server for Ref",
   "type": "module",
   "scripts": {
@@ -10,7 +10,8 @@
     "inspect": "npx @modelcontextprotocol/inspector node dist/index.cjs",
     "dev": "concurrently \"npm run watch\" \"npm run inspect\"",
     "check": "tsc --noEmit",
-    "pre-commit": "npm run check"
+    "pre-commit": "npm run check",
+    "prepublishOnly": "npm run build"
   },
   "bin": {
     "ref-tools-mcp": "./dist/index.cjs"
