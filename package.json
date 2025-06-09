@@ -3,6 +3,7 @@
   "version": "0.16.0",
   "description": "ModelContextProtocol server for Ref",
   "type": "module",
+  "module": "index.ts",
   "scripts": {
     "make-executable": "node -e \"fs.chmodSync('dist/index.cjs', '755');\" --require fs",
     "build": "esbuild index.ts --outfile=dist/index.cjs --bundle --platform=node --format=cjs --banner:js='#!/usr/bin/env node' && npm run make-executable",
@@ -29,6 +30,7 @@
     "concurrently": "^8.2.2",
     "esbuild": "^0.24.0",
     "prettier": "^3.4.2",
+    "tsx": "^4.19.4",
     "typescript": "^5.3.3"
   }
 }
