@@ -1,0 +1,24 @@
+# Smithery configuration file: https://smithery.ai/docs/build/project-config
+
+startCommand:
+  type: stdio
+  commandFunction:
+    # A JS function that produces the CLI command based on the given config to start the MCP on stdio.
+    |-
+    (config) => ({ command: 'node', args: ['dist/index.cjs'], env: { REF_API_KEY: config.refApiKey, ...(config.disableSearchWeb ? { DISABLE_SEARCH_WEB: 'true' } : {}) } })
+  configSchema:
+    # JSON Schema defining the configuration options for the MCP.
+    type: object
+    required:
+      - refApiKey
+    properties:
+      refApiKey:
+        type: string
+        description: API key for Ref MCP server
+      disableSearchWeb:
+        type: boolean
+        default: false
+        description: Disable the fallback web search tool
+  exampleConfig:
+    refApiKey: my-dummy-api-key
+    disableSearchWeb: false
