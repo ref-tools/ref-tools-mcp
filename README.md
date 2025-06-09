@@ -1,5 +1,5 @@
-
 [![Documentation for your agent](header.png)](https://ref.tools)
+[![smithery badge](https://smithery.ai/badge/@ref-tools/ref-tools-mcp)](https://smithery.ai/server/@ref-tools/ref-tools-mcp)
 
 # Ref MCP
 
