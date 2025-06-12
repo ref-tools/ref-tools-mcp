@@ -5,6 +5,10 @@
 
 A [ModelContextProtocol](https://modelcontextprotocol.io) server that gives your AI coding tool or agent access to documentation for APIs, services, libraries etc. It's your one-stop-shop to keep your agent up-to-date on documentation in a fast and token-efficient way.
 
+<a href="https://glama.ai/mcp/servers/@ref-tools/ref-tools-mcp">
+  <img width="380" height="200" src="https://glama.ai/mcp/servers/@ref-tools/ref-tools-mcp/badge" alt="Ref MCP server" />
+</a>
+
 For more see info [ref.tools](https://ref.tools)
 
 ## Setup
