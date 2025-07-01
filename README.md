@@ -13,19 +13,11 @@ There are two options for setting up Ref as an MCP server, either via the stream
 
 This repo contains the legacy stdio server. 
 
-### stdio 
+### Streamable HTTP (recommended)
 
-```
-"Ref": {
-  "command": "npx",
-  "args": ["ref-tools-mcp"],
-  "env": {
-    "REF_API_KEY": <sign up to get an api key>
-  }
-}
-```
-
-### Streamable HTTP (experimental)
+<a href="cursor://anysphere.cursor-deeplink/mcp/install?name=Ref&config=eyJjb21tYW5kIjoibnB4IiwiYXJncyI6WyIteSIsIm1jcC1yZW1vdGVAMC4xLjAtMCIsImh0dHBzOi8vYXBpLnJlZi50b29scy9tY3AiLCItLWhlYWRlciIsIngtcmVmLWFwaS1rZXk6PHNpZ24gdXAgdG8gZ2V0IGFuIGFwaSBrZXk%2BIl19">
+  <img src="https://cursor.com/deeplink/mcp-install-dark.svg" alt="Install Ref MCP in Cursor" />
+</a>
 
 ```
 "Ref": {
@@ -40,6 +32,23 @@ This repo contains the legacy stdio server.
   }
 }
 ```
+
+### stdio 
+
+<a href="cursor://anysphere.cursor-deeplink/mcp/install?name=Ref&config=eyJjb21tYW5kIjoibnB4IiwiYXJncyI6WyJyZWYtdG9vbHMtbWNwIl0sImVudiI6eyJSRUZfQVBJX0tFWSI6IjxzaWduIHVwIHRvIGdldCBhbiBhcGkga2V5PiJ9fQ%3D%3D">
+  <img src="https://cursor.com/deeplink/mcp-install-dark.svg" alt="Install Ref MCP in Cursor (stdio)" />
+</a>
+
+```
+"Ref": {
+  "command": "npx",
+  "args": ["ref-tools-mcp"],
+  "env": {
+    "REF_API_KEY": <sign up to get an api key>
+  }
+}
+```
+
 
 As of April 2025, MCP supports streamable HTTP servers. Ref implements this but not all clients support it yet so the most reliable approach is to use `mcp-remote` as a local proxy. If you know your client supports streamable HTTP servers, feel free to use https://api.ref.tools/mcp directly.
 
