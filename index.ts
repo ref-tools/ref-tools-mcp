@@ -162,6 +162,60 @@ const getRefUrl = () => {
 
 let moduleNames: string[] | undefined = undefined
 
+function formatSearchResult(result: any): string {
+  // Check if this is a private repo result that needs formatting
+  if (result.content && typeof result.content === 'string') {
+    const content = result.content
+    const lines = content.split('\n')
+    
+    // Check if it's in the private repo format (starts with repo: and filepath:)
+    if (lines.length >= 2 && lines[0].startsWith('repo:') && lines[1].startsWith('filepath:')) {
+      const repoLine = lines[0]
+      const filepathLine = lines[1]
+      let contentStartIndex = 2
+      
+      // Find where the content starts (after separator)
+      for (let i = 2; i < lines.length; i++) {
+        if (lines[i] === '----') {
+          contentStartIndex = i + 1
+          // Skip any empty lines after the separator
+          while (contentStartIndex < lines.length && lines[contentStartIndex].trim() === '') {
+            contentStartIndex++
+          }
+          break
+        }
+      }
+      
+      // Extract the actual content
+      const actualContent = lines.slice(contentStartIndex).join('\n')
+      const contentLines = actualContent.split('\n')
+      
+      // Check if content starts with overview line
+      if (contentLines.length > 0 && contentLines[0].trim().startsWith('overview:')) {
+        const overviewLine = contentLines[0].trim()
+        const cleanedContent = contentLines.slice(1).join('\n').trimStart()
+        
+        // Return the properly formatted result with overview in metadata
+        const formattedResult = {
+          ...result,
+          content: `${repoLine}\n${filepathLine}\n${overviewLine}\n\n----\n\n${cleanedContent}`
+        }
+        return JSON.stringify(formattedResult)
+      } else {
+        // No overview line in content, add empty overview to metadata
+        const formattedResult = {
+          ...result,
+          content: `${repoLine}\n${filepathLine}\noverview: \n\n----\n\n${actualContent}`
+        }
+        return JSON.stringify(formattedResult)
+      }
+    }
+  }
+  
+  // For non-private repo results or results that don't need formatting, return as-is
+  return JSON.stringify(result)
+}
+
 async function doSearch(query: string, keyWords?: string[], source?: string) {
   // Handle web search through Tavily when source is 'web'
   if (source === 'web') {
@@ -211,7 +265,7 @@ async function doSearch(query: string, keyWords?: string[], source?: string) {
         },
         ...data.docs.map((result: any) => ({
           type: 'text',
-          text: JSON.stringify(result),
+          text: formatSearchResult(result),
         })),
       ],
     }
@@ -300,53 +354,12 @@ async function doRead(url: string) {
     })
 
     const data = response.data
-    
-    // Check if the content is from a private repo by looking for the expected format
-    const content = data.content
-    const lines = content.split('\n')
-    
-    let formattedContent = content
-    let isPrivateRepoFormat = false
-    
-    // Check if the content starts with repo: and filepath: format
-    if (lines.length >= 2 && lines[0].startsWith('repo:') && lines[1].startsWith('filepath:')) {
-      isPrivateRepoFormat = true
-      
-      // Extract metadata
-      const repoLine = lines[0]
-      const filepathLine = lines[1]
-      let overviewLine = ''
-      let contentStartIndex = 2
-      
-      // Check if there's a separator line
-      if (lines[2] === '' && lines[3] === '----') {
-        contentStartIndex = 5 // Skip empty line and separator
-      } else if (lines[2] === '----') {
-        contentStartIndex = 4 // Skip separator
-      }
-      
-      // Extract the actual content (everything after the metadata and separator)
-      const actualContent = lines.slice(contentStartIndex).join('\n')
-      
-      // Check if the content has an overview line at the beginning
-      const contentLines = actualContent.split('\n')
-      let cleanedContent = actualContent
-      
-      if (contentLines.length > 0 && contentLines[0].startsWith('overview:')) {
-        // Remove the overview line from the content
-        overviewLine = contentLines[0]
-        cleanedContent = contentLines.slice(1).join('\n').trimStart()
-      }
-      
-      // Format the content in the indexed format
-      formattedContent = `${repoLine}\n${filepathLine}\n${overviewLine || 'overview: '}\n\n----\n\n${cleanedContent}`
-    }
 
     return {
       content: [
         {
           type: 'text',
-          text: isPrivateRepoFormat ? formattedContent : `Title: ${data.title}\n\n${content}`,
+          text: `Title: ${data.title}\n\n${data.content}`,
         },
       ],
     }
