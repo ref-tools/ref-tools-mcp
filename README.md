@@ -15,9 +15,7 @@ This repo contains the legacy stdio server.
 
 ### Streamable HTTP (recommended)
 
-<a href="cursor://anysphere.cursor-deeplink/mcp/install?name=Ref&config=eyJjb21tYW5kIjoibnB4IiwiYXJncyI6WyIteSIsIm1jcC1yZW1vdGVAMC4xLjAtMCIsImh0dHBzOi8vYXBpLnJlZi50b29scy9tY3AiLCItLWhlYWRlciIsIngtcmVmLWFwaS1rZXk6PHNpZ24gdXAgdG8gZ2V0IGFuIGFwaSBrZXk%2BIl19">
-  <img src="https://cursor.com/deeplink/mcp-install-dark.svg" alt="Install Ref MCP in Cursor" />
-</a>
+[![Install Ref MCP in Cursor](https://cursor.com/deeplink/mcp-install-dark.svg)](https://cursor.com/install-mcp?name=Ref&config=eyJjb21tYW5kIjoibnB4IiwiYXJncyI6WyIteSIsIm1jcC1yZW1vdGVAMC4xLjAtMCIsImh0dHBzOi8vYXBpLnJlZi50b29scy9tY3AiLCItLWhlYWRlcj14LXJlZi1hcGkta2V5OjxzaWduIHVwIHRvIGdldCBhbiBhcGkga2V5PiJdfQ==)
 
 ```
 "Ref": {
@@ -25,9 +23,8 @@ This repo contains the legacy stdio server.
     "args": [
       "-y",
       "mcp-remote@0.1.0-0",
-      "https://api.ref.tools/mcp"
-      "--header",
-      "x-ref-api-key:<sign up to get an api key>"
+      "https://api.ref.tools/mcp",
+      "--header=x-ref-api-key:<sign up to get an api key>"
     ]
   }
 }
@@ -35,9 +32,7 @@ This repo contains the legacy stdio server.
 
 ### stdio 
 
-<a href="cursor://anysphere.cursor-deeplink/mcp/install?name=Ref&config=eyJjb21tYW5kIjoibnB4IiwiYXJncyI6WyJyZWYtdG9vbHMtbWNwIl0sImVudiI6eyJSRUZfQVBJX0tFWSI6IjxzaWduIHVwIHRvIGdldCBhbiBhcGkga2V5PiJ9fQ%3D%3D">
-  <img src="https://cursor.com/deeplink/mcp-install-dark.svg" alt="Install Ref MCP in Cursor (stdio)" />
-</a>
+[![Install Ref MCP in Cursor (stdio)](https://cursor.com/deeplink/mcp-install-dark.svg)](https://cursor.com/install-mcp?name=Ref&config=eyJjb21tYW5kIjoibnB4IiwiYXJncyI6WyJyZWYtdG9vbHMtbWNwIl0sImVudiI6eyJSRUZfQVBJX0tFWSI6IjxzaWduIHVwIHRvIGdldCBhbiBhcGkga2V5PiJ9fQ==)
 
 ```
 "Ref": {
