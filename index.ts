@@ -1,5 +1,5 @@
 /**
- * @fileoverview Implements an MCP server using `Server` and `StdioServerTransport` to expose tools like `ref_search_documentation` (using `doSearch`), `ref_read` (using `doRead`), and `ref_search_web` (using `doSearchWeb`). It handles `ListToolsRequestSchema` and `CallToolRequestSchema` requests to execute these tools.
+ * @fileoverview Implements an MCP server using `Server` and `StdioServerTransport` to expose tools like `ref_search_documentation` (using `doSearch`) and `ref_read_url` (using `doRead`). It handles `ListToolsRequestSchema` and `CallToolRequestSchema` requests to execute these tools.
  */
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js'
@@ -8,6 +8,8 @@ import {
   CallToolRequestSchema,
   ErrorCode,
   ListToolsRequestSchema,
+  ListPromptsRequestSchema,
+  GetPromptRequestSchema,
   McpError,
   type Tool,
 } from '@modelcontextprotocol/sdk/types.js'
@@ -16,10 +18,13 @@ import axios from 'axios'
 const server = new Server(
   {
     name: 'Ref',
-    version: '0.12.0',
+    version: '2.0.0',
   },
   {
     capabilities: {
+      prompts: {
+        listChanged: true,
+      },
       tools: {},
       logging: {},
     },
@@ -28,33 +33,26 @@ const server = new Server(
 
 const SEARCH_DOCUMENTATION_TOOL: Tool = {
   name: 'ref_search_documentation',
-  description: `A powerful search tool to check technical documentation. Whenever you need to respond about any technical platform, framework, api, service, database, library, etc you should use this tool to check the documentation, even if you think you know the answer. Make sure to include the language and any other relevant context in the query.`,
+  description: `A powerful search tool to check technical documentation. Great for finding facts or code snippets. Can be used to search for public documentation on the web or github as well from private resources like repos and pdfs.`,
   inputSchema: {
     type: 'object',
     properties: {
       query: {
         type: 'string',
-        description: `Query to search for relevant documentation. 
-        
-Make sure to include the user's query as well as other important context you have such as languages and frameworks being used that the user didn't mention directly. 
-
-The query should be in full sentence form. Be clear and include all the relevant context.`,
+        description: `Query to search for relevant documentation. This should be a full sentence or question.`,
       },
-    },
-    required: ['query'],
-  },
-}
-
-const SEARCH_WEB_TOOL: Tool = {
-  name: 'ref_search_web',
-  description: `Search the web for information. This should be used as a fallback when the ref_search_documentation tool doesn't have the information you need.`,
-  inputSchema: {
-    type: 'object',
-    properties: {
-      query: {
+      keyWords: {
+        type: 'array',
+        items: {
+          type: 'string',
+        },
+        description: 'A list of keywords to use for the search like you would use for grep',
+      },
+      source: {
         type: 'string',
+        enum: ['all', 'public', 'private', 'web'],
         description:
-          'The search term to look up on the web. Be specific and include relevant keywords for better results. For technical queries, include version numbers or dates if relevant.',
+          "Defaults to 'all'. 'public' is used when the user is asking about a public API or library. 'private' is used when the user is asking about their own private repo or pdfs. 'web' is use only as a fallback when 'public' has failed.",
       },
     },
     required: ['query'],
@@ -62,8 +60,8 @@ const SEARCH_WEB_TOOL: Tool = {
 }
 
 const READ_TOOL: Tool = {
-  name: 'ref_read',
-  description: `A tool that fetches content from a URL and converts it to markdown for easy reading. 
+  name: 'ref_read_url',
+  description: `A tool that fetches content from a URL and converts it to markdown for easy reading with Ref. 
 
 This is powerful when used in conjunction with the ref_search_documentation or ref_search_web tool that return urls of relevant content.`,
   inputSchema: {
@@ -71,7 +69,7 @@ This is powerful when used in conjunction with the ref_search_documentation or r
     properties: {
       url: {
         type: 'string',
-        description: 'The URL of the webpage to read and convert to markdown.',
+        description: 'The URL of the webpage to read.',
       },
     },
     required: ['url'],
@@ -79,11 +77,81 @@ This is powerful when used in conjunction with the ref_search_documentation or r
 }
 
 server.setRequestHandler(ListToolsRequestSchema, async () => ({
-  tools:
-    process.env.DISABLE_SEARCH_WEB === 'true'
-      ? [SEARCH_DOCUMENTATION_TOOL, READ_TOOL]
-      : [SEARCH_DOCUMENTATION_TOOL, READ_TOOL, SEARCH_WEB_TOOL],
+  tools: [SEARCH_DOCUMENTATION_TOOL, READ_TOOL],
 }))
+
+server.setRequestHandler(ListPromptsRequestSchema, async () => ({
+  prompts: [
+    {
+      name: 'search_docs',
+      description:
+        'A quick way to check technical documentation. This prompt helps you search documentation for any technical platform, framework, API, service, database, or library.',
+      arguments: [
+        {
+          name: 'query',
+          description: 'The rest of your prompt or question you want informed by docs',
+          required: true,
+        },
+      ],
+    },
+    {
+      name: 'my_docs',
+      description:
+        "Search through your private documentation, repos, and PDFs that you've uploaded to Ref.",
+      arguments: [
+        {
+          name: 'query',
+          description: 'The rest of your prompt or question you want informed by your private docs',
+          required: true,
+        },
+      ],
+    },
+  ],
+}))
+
+server.setRequestHandler(GetPromptRequestSchema, async (request) => {
+  const { name, arguments: args } = request.params
+
+  if (name === 'search_docs') {
+    const query = args?.query as string
+    if (!query) {
+      throw new McpError(ErrorCode.InvalidParams, 'Missing required argument: query')
+    }
+
+    return {
+      messages: [
+        {
+          role: 'user',
+          content: {
+            type: 'text',
+            text: `${query}\n\nRemember to check the docs with ref`,
+          },
+        },
+      ],
+    }
+  }
+
+  if (name === 'my_docs') {
+    const query = args?.query as string
+    if (!query) {
+      throw new McpError(ErrorCode.InvalidParams, 'Missing required argument: query')
+    }
+
+    return {
+      messages: [
+        {
+          role: 'user',
+          content: {
+            type: 'text',
+            text: `${query}\n\nSearch my private docs with ref`,
+          },
+        },
+      ],
+    }
+  }
+
+  throw new McpError(ErrorCode.InvalidParams, `Unknown prompt: ${name}`)
+})
 
 const getRefUrl = () => {
   if (process.env.REF_URL) {
@@ -94,11 +162,18 @@ const getRefUrl = () => {
 
 let moduleNames: string[] | undefined = undefined
 
-async function doSearch(query: string) {
+async function doSearch(query: string, keyWords?: string[], source?: string) {
+  // Handle web search through Tavily when source is 'web'
+  if (source === 'web') {
+    return doSearchWeb(query)
+  }
+
   const url =
     getRefUrl() +
     '/search_documentation?query=' +
     encodeURIComponent(query) +
+    (keyWords && keyWords.length > 0 ? '&keyWords=' + keyWords.join(',') : '') +
+    (source ? '&source=' + source : '') +
     (moduleNames ? '&moduleNames=' + moduleNames?.join(',') : '')
   console.error('[search]', url)
 
@@ -132,7 +207,7 @@ async function doSearch(query: string) {
       content: [
         {
           type: 'text',
-          text: `Found ${data.docs.length} results for ${query} from ${getRefUrl()}\n\n${data.docs.map((result: any) => result.url).join('\n')}`,
+          text: `Found ${data.docs.length} results for "${query}"\n\n${data.docs.map((result: any) => result.url).join('\n')}`,
         },
         ...data.docs.map((result: any) => ({
           type: 'text',
@@ -184,15 +259,9 @@ async function doSearchWeb(query: string) {
       }
     }
 
-    // Format the results in a readable way for the LLM
-    const formattedResults = data.docs
-      .map((result: any) => {
-        return JSON.stringify(result)
-      })
-      .join('\n\n')
-
+    // Format the results to match the endpoint format
     return {
-      content: [{ type: 'text', text: formattedResults }],
+      content: data.docs.map((result: any) => ({ type: 'text', text: JSON.stringify(result) })),
     }
   } catch (error) {
     console.error('[search_web-error]', error)
@@ -236,8 +305,7 @@ async function doRead(url: string) {
       content: [
         {
           type: 'text',
-          canCrawl: data.allowed,
-          text: data.content || 'No content could be extracted from the URL.',
+          text: `Title: ${data.title}\n\n${data.content}`,
         },
       ],
     }
@@ -257,14 +325,12 @@ async function doRead(url: string) {
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   if (request.params.name === SEARCH_DOCUMENTATION_TOOL.name) {
     console.error('[search_documentation] arguments', request.params.arguments)
-    const input = request.params.arguments as { query: string }
-    return doSearch(input.query)
-  }
-
-  if (request.params.name === SEARCH_WEB_TOOL.name) {
-    console.error('[search_web] arguments', request.params.arguments)
-    const input = request.params.arguments as { query: string }
-    return doSearchWeb(input.query)
+    const input = request.params.arguments as {
+      query: string
+      keyWords?: string[]
+      source?: string
+    }
+    return doSearch(input.query, input.keyWords, input.source)
   }
 
   if (request.params.name === READ_TOOL.name) {

@@ -51,17 +51,21 @@ Ref MCP server provides all the documentation related tools for your agent needs
 
 ### ref_search_documentation
 
-A powerful search tool to check technical documentation. Use this tool whenever you need information about any technical platform, framework, API, service, database, or library. It searches through relevant documentation and finds exactly what you need, down to the specific section of the page.
+A powerful search tool to check technical documentation. Great for finding facts or code snippets. Can be used to search for public documentation on the web or github as well from private resources like repos and pdfs.
+
+**Parameters:**
+- `query` (required): Query to search for relevant documentation. This should be a full sentence or question.
+- `keyWords` (optional): A list of keywords to use for the search like you would use for grep.
+- `source` (optional): Defaults to 'all'. 'public' is used when the user is asking about a public API or library. 'private' is used when the user is asking about their own private repo or pdfs. 'web' is use only as a fallback when 'public' has failed.
+
+**Note:** When `source` is set to 'web', this tool will perform web search to find relevant information online.
 
 ### ref_read_url
 
-A tool to read the full content of a web page. This allows your agent to follow links in documentation and web searches.
+A tool that fetches content from a URL and converts it to markdown for easy reading with Ref. This is powerful when used in conjunction with the ref_search_documentation tool that returns urls of relevant content.
 
-### ref_search_web (optional)
-
-A fallback web search tool to cover cases when `ref_search_documentation` doesn't find what you need. It will find links to relevant pages on the web and the `ref_read_url` tool can be used to read the relevant ones.
-
-We include this tool so that Ref can cover all your search needs in one MCP server but if you prefer another search provider you can disable `ref_search_web` by setting the `DISABLE_SEARCH_WEB` environment variable to `true` or by setting the `disable_search_web=false` url param in the streamable-http server.
+**Parameters:**
+- `url` (required): The URL of the webpage to read.
 
 ## Development
 
