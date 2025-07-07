@@ -1,5 +1,7 @@
 # Smithery configuration file: https://smithery.ai/docs/build/project-config
 
+runtime: container
+
 startCommand:
   type: stdio
   commandFunction:
