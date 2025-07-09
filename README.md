@@ -1,3 +1,5 @@
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/ref-tools-ref-tools-mcp-badge.png)](https://mseep.ai/app/ref-tools-ref-tools-mcp)
+
 [![Documentation for your agent](header.png)](https://ref.tools)
 [![smithery badge](https://smithery.ai/badge/@ref-tools/ref-tools-mcp)](https://smithery.ai/server/@ref-tools/ref-tools-mcp)
 
