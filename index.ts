@@ -66,8 +66,9 @@ This is powerful when used in conjunction with the ref_search_documentation or r
 const TRANSPORT_TYPE = (process.env.TRANSPORT || "stdio") as "stdio" | "http";
 const HTTP_PORT = parseInt(process.env.PORT || "8080", 10);
 
-// Global variable to store current request API key
+// Global variables to store current request config
 let currentApiKey: string | undefined = undefined;
+let disableSearchWeb: boolean = false;
 
 // Function to create a new server instance
 function createServerInstance() {
@@ -214,8 +215,13 @@ const getAuthHeaders = () => {
 let moduleNames: string[] | undefined = undefined
 
 async function doSearch(query: string, keyWords?: string[], source?: string) {
-  // Handle web search through Tavily when source is 'web'
+  // Handle web search through Tavily when source is 'web' (unless disabled)
   if (source === 'web') {
+    if (disableSearchWeb) {
+      return {
+        content: [{ type: 'text', text: 'Web search is disabled' }],
+      }
+    }
     return doSearchWeb(query)
   }
 
@@ -384,11 +390,16 @@ async function main() {
       }
 
       try {
-        // Extract API key from URL parameters for Smithery compatibility
+        // Extract config from URL parameters for Smithery compatibility
         const fullUrl = new URL(req.url || "", `http://${req.headers.host}`);
-        const apiKey = fullUrl.searchParams.get('api_key') || fullUrl.searchParams.get('apiKey');
-        if (apiKey) {
-          currentApiKey = apiKey;
+        const refApiKey = fullUrl.searchParams.get('refApiKey');
+        const disableWebSearch = fullUrl.searchParams.get('disableSearchWeb');
+        
+        if (refApiKey) {
+          currentApiKey = refApiKey;
+        }
+        if (disableWebSearch !== null) {
+          disableSearchWeb = disableWebSearch === 'true';
         }
 
         // Create new server instance for each request
@@ -414,8 +425,9 @@ async function main() {
           res.end("Internal Server Error");
         }
       } finally {
-        // Clear the API key after request processing
+        // Clear config after request processing
         currentApiKey = undefined;
+        disableSearchWeb = false;
       }
     });
 
