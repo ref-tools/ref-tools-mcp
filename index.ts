@@ -1,5 +1,6 @@
 /**
- * @fileoverview Implements an MCP server using `Server` and `StdioServerTransport` to expose tools like `ref_search_documentation` (using `doSearch`) and `ref_read_url` (using `doRead`). It handles `ListToolsRequestSchema` and `CallToolRequestSchema` requests to execute these tools.
+ * @fileoverview Ref MCP server with documentation search and URL reading tools. 
+ * Supports stdio and HTTP transports with dynamic configuration.
  */
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js'
