@@ -66,6 +66,9 @@ This is powerful when used in conjunction with the ref_search_documentation or r
 const TRANSPORT_TYPE = (process.env.TRANSPORT || "stdio") as "stdio" | "http";
 const HTTP_PORT = parseInt(process.env.PORT || "8080", 10);
 
+// Global variable to store current request API key
+let currentApiKey: string | undefined = undefined;
+
 // Function to create a new server instance
 function createServerInstance() {
   const server = new Server(
@@ -195,6 +198,19 @@ const getRefUrl = () => {
   return 'https://api.ref.tools'
 }
 
+// Helper function to get API key from environment or current request
+const getApiKey = () => {
+  return process.env.REF_ALPHA || process.env.REF_API_KEY || currentApiKey
+}
+
+// Helper function to get auth headers
+const getAuthHeaders = () => {
+  return {
+    'X-Ref-Alpha': process.env.REF_ALPHA || (currentApiKey && !process.env.REF_API_KEY ? currentApiKey : undefined),
+    'X-Ref-Api-Key': process.env.REF_API_KEY || (currentApiKey && !process.env.REF_ALPHA ? currentApiKey : undefined),
+  }
+}
+
 let moduleNames: string[] | undefined = undefined
 
 async function doSearch(query: string, keyWords?: string[], source?: string) {
@@ -212,7 +228,7 @@ async function doSearch(query: string, keyWords?: string[], source?: string) {
     (moduleNames ? '&moduleNames=' + moduleNames?.join(',') : '')
   console.error('[search]', url)
 
-  if (!process.env.REF_ALPHA && !process.env.REF_API_KEY) {
+  if (!getApiKey()) {
     return {
       content: [
         {
@@ -225,10 +241,7 @@ async function doSearch(query: string, keyWords?: string[], source?: string) {
 
   try {
     const response = await axios.get(url, {
-      headers: {
-        'X-Ref-Alpha': process.env.REF_ALPHA,
-        'X-Ref-Api-Key': process.env.REF_API_KEY,
-      },
+      headers: getAuthHeaders(),
     })
     const data = response.data
 
@@ -268,7 +281,7 @@ async function doSearchWeb(query: string) {
     const searchWebUrl = getRefUrl() + '/search_web?query=' + encodeURIComponent(query)
     console.error('[search_web]', searchWebUrl)
 
-    if (!process.env.REF_ALPHA && !process.env.REF_API_KEY) {
+    if (!getApiKey()) {
       return {
         content: [
           {
@@ -280,10 +293,7 @@ async function doSearchWeb(query: string) {
     }
 
     const response = await axios.get(searchWebUrl, {
-      headers: {
-        'X-Ref-Alpha': process.env.REF_ALPHA,
-        'X-Ref-Api-Key': process.env.REF_API_KEY,
-      },
+      headers: getAuthHeaders(),
     })
 
     const data = response.data
@@ -316,7 +326,7 @@ async function doRead(url: string) {
     const readUrl = getRefUrl() + '/read?url=' + encodeURIComponent(url)
     console.error('[read]', readUrl)
 
-    if (!process.env.REF_ALPHA && !process.env.REF_API_KEY) {
+    if (!getApiKey()) {
       return {
         content: [
           {
@@ -328,10 +338,7 @@ async function doRead(url: string) {
     }
 
     const response = await axios.get(readUrl, {
-      headers: {
-        'X-Ref-Alpha': process.env.REF_ALPHA,
-        'X-Ref-Api-Key': process.env.REF_API_KEY,
-      },
+      headers: getAuthHeaders(),
     })
 
     const data = response.data
@@ -377,6 +384,13 @@ async function main() {
       }
 
       try {
+        // Extract API key from URL parameters for Smithery compatibility
+        const fullUrl = new URL(req.url || "", `http://${req.headers.host}`);
+        const apiKey = fullUrl.searchParams.get('api_key') || fullUrl.searchParams.get('apiKey');
+        if (apiKey) {
+          currentApiKey = apiKey;
+        }
+
         // Create new server instance for each request
         const requestServer = createServerInstance();
 
@@ -399,6 +413,9 @@ async function main() {
           res.writeHead(500);
           res.end("Internal Server Error");
         }
+      } finally {
+        // Clear the API key after request processing
+        currentApiKey = undefined;
       }
     });
 
