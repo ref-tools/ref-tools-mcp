@@ -390,10 +390,10 @@ async function main() {
       }
 
       try {
-        // Extract config from URL parameters for Smithery compatibility
+        // Extract config from URL parameters using dot-notation for Smithery compatibility
         const fullUrl = new URL(req.url || "", `http://${req.headers.host}`);
-        const refApiKey = fullUrl.searchParams.get('refApiKey');
-        const disableWebSearch = fullUrl.searchParams.get('disableSearchWeb');
+        const refApiKey = fullUrl.searchParams.get('server.refApiKey');
+        const disableWebSearch = fullUrl.searchParams.get('server.disableSearchWeb');
         
         if (refApiKey) {
           currentApiKey = refApiKey;
