@@ -390,16 +390,24 @@ async function main() {
       }
 
       try {
-        // Extract config from URL parameters using dot-notation for Smithery compatibility
+        // Extract config from base64-encoded JSON parameter for Smithery compatibility
         const fullUrl = new URL(req.url || "", `http://${req.headers.host}`);
-        const refApiKey = fullUrl.searchParams.get('server.refApiKey');
-        const disableWebSearch = fullUrl.searchParams.get('server.disableSearchWeb');
+        const configParam = fullUrl.searchParams.get('config');
         
-        if (refApiKey) {
-          currentApiKey = refApiKey;
-        }
-        if (disableWebSearch !== null) {
-          disableSearchWeb = disableWebSearch === 'true';
+        if (configParam) {
+          try {
+            const decodedConfig = Buffer.from(configParam, 'base64').toString('utf-8');
+            const config = JSON.parse(decodedConfig);
+            
+            if (config.refApiKey) {
+              currentApiKey = config.refApiKey;
+            }
+            if (config.disableSearchWeb !== undefined) {
+              disableSearchWeb = Boolean(config.disableSearchWeb);
+            }
+          } catch (error) {
+            console.error('Failed to parse config parameter:', error);
+          }
         }
 
         // Create new server instance for each request
