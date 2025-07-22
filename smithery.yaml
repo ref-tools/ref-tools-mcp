@@ -13,7 +13,7 @@ startCommand:
       refApiKey:
         type: string
         title: "Ref API Key"
-        description: "API key for Ref MCP server"
+        description: "API key for Ref MCP server. Get one from https://ref.tools/keys"
       disableSearchWeb:
         type: boolean
         title: "Disable Search Web"
