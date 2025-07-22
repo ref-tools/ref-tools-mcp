@@ -294,8 +294,7 @@ async function doSearch(query: string, mcpClient: string = 'unknown', sessionId?
       return {
         content: data.docs.map((doc: any) => ({
           type: 'text' as const,
-          text: `
-overview: ${doc.overview || ''}
+          text: `overview: ${doc.overview || ''}
 url: ${doc.url}
 moduleId: ${doc.moduleId || ''}`,
         })),
