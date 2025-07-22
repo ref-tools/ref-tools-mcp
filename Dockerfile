@@ -24,5 +24,8 @@ COPY --from=builder /app/dist ./dist
 # Ensure executable permissions
 RUN chmod +x dist/index.cjs
 
-EXPOSE 3000
+# Set HTTP transport mode by default
+ENV TRANSPORT=http
+
+EXPOSE 8080
 ENTRYPOINT ["node", "dist/index.cjs"]

@@ -3,11 +3,7 @@
 runtime: container
 
 startCommand:
-  type: stdio
-  commandFunction:
-    # A JS function that produces the CLI command based on the given config to start the MCP on stdio.
-    |-
-    (config) => ({ command: 'node', args: ['dist/index.cjs'], env: { REF_API_KEY: config.refApiKey, ...(config.disableSearchWeb ? { DISABLE_SEARCH_WEB: 'true' } : {}) } })
+  type: http
   configSchema:
     # JSON Schema defining the configuration options for the MCP.
     type: object
@@ -16,11 +12,17 @@ startCommand:
     properties:
       refApiKey:
         type: string
-        description: API key for Ref MCP server
+        title: "Ref API Key"
+        description: "API key for Ref MCP server"
       disableSearchWeb:
         type: boolean
+        title: "Disable Search Web"
         default: false
-        description: Disable the fallback web search tool
+        description: "Disable the fallback web search tool"
   exampleConfig:
-    refApiKey: my-dummy-api-key
+    refApiKey: "my-dummy-api-key"
     disableSearchWeb: false
+
+build:
+  dockerfile: "Dockerfile"
+  dockerBuildPath: "."

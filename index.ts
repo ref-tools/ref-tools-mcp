@@ -4,6 +4,7 @@
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
+import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
 import {
   CallToolRequestSchema,
   ErrorCode,
@@ -14,22 +15,7 @@ import {
   type Tool,
 } from '@modelcontextprotocol/sdk/types.js'
 import axios from 'axios'
-
-const server = new Server(
-  {
-    name: 'Ref',
-    version: '2.0.0',
-  },
-  {
-    capabilities: {
-      prompts: {
-        listChanged: true,
-      },
-      tools: {},
-      logging: {},
-    },
-  },
-)
+import { createServer } from 'http'
 
 const SEARCH_DOCUMENTATION_TOOL: Tool = {
   name: 'ref_search_documentation',
@@ -76,82 +62,131 @@ This is powerful when used in conjunction with the ref_search_documentation or r
   },
 }
 
-server.setRequestHandler(ListToolsRequestSchema, async () => ({
-  tools: [SEARCH_DOCUMENTATION_TOOL, READ_TOOL],
-}))
+// Transport configuration from environment
+const TRANSPORT_TYPE = (process.env.TRANSPORT || "stdio") as "stdio" | "http";
+const HTTP_PORT = parseInt(process.env.PORT || "8080", 10);
 
-server.setRequestHandler(ListPromptsRequestSchema, async () => ({
-  prompts: [
+// Function to create a new server instance
+function createServerInstance() {
+  const server = new Server(
     {
-      name: 'search_docs',
-      description:
-        'A quick way to check technical documentation. This prompt helps you search documentation for any technical platform, framework, API, service, database, or library.',
-      arguments: [
-        {
-          name: 'query',
-          description: 'The rest of your prompt or question you want informed by docs',
-          required: true,
-        },
-      ],
+      name: 'Ref',
+      version: '2.0.0',
     },
     {
-      name: 'my_docs',
-      description:
-        "Search through your private documentation, repos, and PDFs that you've uploaded to Ref.",
-      arguments: [
-        {
-          name: 'query',
-          description: 'The rest of your prompt or question you want informed by your private docs',
-          required: true,
+      capabilities: {
+        prompts: {
+          listChanged: true,
         },
-      ],
+        tools: {},
+        logging: {},
+      },
     },
-  ],
-}))
+  )
 
-server.setRequestHandler(GetPromptRequestSchema, async (request) => {
-  const { name, arguments: args } = request.params
+  // Register existing request handlers
+  server.setRequestHandler(ListToolsRequestSchema, async () => ({
+    tools: [SEARCH_DOCUMENTATION_TOOL, READ_TOOL],
+  }))
 
-  if (name === 'search_docs') {
-    const query = args?.query as string
-    if (!query) {
-      throw new McpError(ErrorCode.InvalidParams, 'Missing required argument: query')
-    }
-
-    return {
-      messages: [
-        {
-          role: 'user',
-          content: {
-            type: 'text',
-            text: `${query}\n\nRemember to check the docs with ref`,
+  server.setRequestHandler(ListPromptsRequestSchema, async () => ({
+    prompts: [
+      {
+        name: 'search_docs',
+        description:
+          'A quick way to check technical documentation. This prompt helps you search documentation for any technical platform, framework, API, service, database, or library.',
+        arguments: [
+          {
+            name: 'query',
+            description: 'The rest of your prompt or question you want informed by docs',
+            required: true,
           },
-        },
-      ],
+        ],
+      },
+      {
+        name: 'my_docs',
+        description:
+          "Search through your private documentation, repos, and PDFs that you've uploaded to Ref.",
+        arguments: [
+          {
+            name: 'query',
+            description: 'The rest of your prompt or question you want informed by your private docs',
+            required: true,
+          },
+        ],
+      },
+    ],
+  }))
+
+  server.setRequestHandler(GetPromptRequestSchema, async (request) => {
+    const { name, arguments: args } = request.params
+
+    if (name === 'search_docs') {
+      const query = args?.query as string
+      if (!query) {
+        throw new McpError(ErrorCode.InvalidParams, 'Missing required argument: query')
+      }
+
+      return {
+        messages: [
+          {
+            role: 'user',
+            content: {
+              type: 'text',
+              text: `${query}\n\nRemember to check the docs with ref`,
+            },
+          },
+        ],
+      }
     }
+
+    if (name === 'my_docs') {
+      const query = args?.query as string
+      if (!query) {
+        throw new McpError(ErrorCode.InvalidParams, 'Missing required argument: query')
+      }
+
+      return {
+        messages: [
+          {
+            role: 'user',
+            content: {
+              type: 'text',
+              text: `${query}\n\nSearch my private docs with ref`,
+            },
+          },
+        ],
+      }
+    }
+
+    throw new McpError(ErrorCode.InvalidParams, `Unknown prompt: ${name}`)
+  })
+
+  server.setRequestHandler(CallToolRequestSchema, async (request) => {
+    if (request.params.name === SEARCH_DOCUMENTATION_TOOL.name) {
+      console.error('[search_documentation] arguments', request.params.arguments)
+      const input = request.params.arguments as {
+        query: string
+        keyWords?: string[]
+        source?: string
+      }
+      return doSearch(input.query, input.keyWords, input.source)
+    }
+
+    if (request.params.name === READ_TOOL.name) {
+      const input = request.params.arguments as { url: string }
+      return doRead(input.url)
+    }
+
+    throw new McpError(ErrorCode.MethodNotFound, `Could not find tool: ${request.params.name}`)
+  })
+
+  server.onerror = (error: any) => {
+    console.error(error)
   }
 
-  if (name === 'my_docs') {
-    const query = args?.query as string
-    if (!query) {
-      throw new McpError(ErrorCode.InvalidParams, 'Missing required argument: query')
-    }
-
-    return {
-      messages: [
-        {
-          role: 'user',
-          content: {
-            type: 'text',
-            text: `${query}\n\nSearch my private docs with ref`,
-          },
-        },
-      ],
-    }
-  }
-
-  throw new McpError(ErrorCode.InvalidParams, `Unknown prompt: ${name}`)
-})
+  return server
+}
 
 const getRefUrl = () => {
   if (process.env.REF_URL) {
@@ -322,46 +357,76 @@ async function doRead(url: string) {
   }
 }
 
-server.setRequestHandler(CallToolRequestSchema, async (request) => {
-  if (request.params.name === SEARCH_DOCUMENTATION_TOOL.name) {
-    console.error('[search_documentation] arguments', request.params.arguments)
-    const input = request.params.arguments as {
-      query: string
-      keyWords?: string[]
-      source?: string
-    }
-    return doSearch(input.query, input.keyWords, input.source)
+async function main() {
+  const transportType = TRANSPORT_TYPE;
+
+  if (transportType === "http") {
+    const httpServer = createServer(async (req, res) => {
+      const url = new URL(req.url || "", `http://${req.headers.host}`).pathname;
+
+      // Set CORS headers for all responses
+      res.setHeader("Access-Control-Allow-Origin", "*");
+      res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS,DELETE");
+      res.setHeader("Access-Control-Allow-Headers", "Content-Type, MCP-Session-Id, mcp-session-id");
+
+      // Handle preflight OPTIONS requests
+      if (req.method === "OPTIONS") {
+        res.writeHead(200);
+        res.end();
+        return;
+      }
+
+      try {
+        // Create new server instance for each request
+        const requestServer = createServerInstance();
+
+        if (url === "/mcp") {
+          const transport = new StreamableHTTPServerTransport({
+            sessionIdGenerator: undefined,
+          });
+          await requestServer.connect(transport);
+          await transport.handleRequest(req, res);
+        } else if (url === "/ping") {
+          res.writeHead(200, { "Content-Type": "text/plain" });
+          res.end("pong");
+        } else {
+          res.writeHead(404);
+          res.end("Not found");
+        }
+      } catch (error) {
+        console.error("Error handling request:", error);
+        if (!res.headersSent) {
+          res.writeHead(500);
+          res.end("Internal Server Error");
+        }
+      }
+    });
+
+    httpServer.listen(HTTP_PORT, () => {
+      console.error(
+        `Ref MCP Server running on HTTP at http://localhost:${HTTP_PORT}/mcp`
+      );
+    });
+  } else {
+    // Stdio transport (default)
+    const server = createServerInstance();
+    const transport = new StdioServerTransport();
+    await server.connect(transport);
+    console.error("Ref MCP Server running on stdio");
   }
-
-  if (request.params.name === READ_TOOL.name) {
-    const input = request.params.arguments as { url: string }
-    return doRead(input.url)
-  }
-
-  throw new McpError(ErrorCode.MethodNotFound, `Could not find tool: ${request.params.name}`)
-})
-
-server.onerror = (error: any) => {
-  console.error(error)
 }
 
 process.on('SIGINT', async () => {
-  await server.close()
   process.exit(0)
 })
 
-async function runServer() {
-  const transport = new StdioServerTransport()
-  await server.connect(transport)
-  console.error('MCP Starter Server running on stdio')
-}
-
-runServer().catch((error) => {
+main().catch((error) => {
   console.error('Fatal error running server:', error)
   process.exit(1)
 })
 
 // Export the server for smithery
 export default function () {
+  const server = createServerInstance()
   return server
 }

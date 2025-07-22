@@ -9,6 +9,7 @@
     "build": "esbuild index.ts --outfile=dist/index.cjs --bundle --platform=node --format=cjs --banner:js='#!/usr/bin/env node' && npm run make-executable",
     "watch": "esbuild index.ts --outfile=dist/index.cjs --bundle --platform=node --format=cjs --banner:js='#!/usr/bin/env node' --watch",
     "inspect": "npx @modelcontextprotocol/inspector node dist/index.cjs",
+    "start:http": "TRANSPORT=http node dist/index.cjs",
     "dev": "concurrently \"npm run watch\" \"npm run inspect\"",
     "check": "tsc --noEmit",
     "pre-commit": "npm run check",
