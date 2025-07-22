@@ -1,5 +1,5 @@
 /**
- * @fileoverview Ref MCP server with documentation search and URL reading tools. 
+ * @fileoverview Ref MCP server with documentation search and URL reading tools.
  * Supports stdio and HTTP transports with dynamic configuration.
  */
 
@@ -13,70 +13,89 @@ import {
   ListPromptsRequestSchema,
   GetPromptRequestSchema,
   McpError,
+  isInitializeRequest,
   type Tool,
 } from '@modelcontextprotocol/sdk/types.js'
 import axios from 'axios'
 import { createServer } from 'http'
+import { randomUUID } from 'crypto'
 
-const SEARCH_DOCUMENTATION_TOOL: Tool = {
-  name: 'ref_search_documentation',
-  description: `A powerful search tool to check technical documentation. Great for finding facts or code snippets. Can be used to search for public documentation on the web or github as well from private resources like repos and pdfs.`,
-  inputSchema: {
-    type: 'object',
-    properties: {
-      query: {
-        type: 'string',
-        description: `Query to search for relevant documentation. This should be a full sentence or question.`,
-      },
-      keyWords: {
-        type: 'array',
-        items: {
-          type: 'string',
-        },
-        description: 'A list of keywords to use for the search like you would use for grep',
-      },
-      source: {
-        type: 'string',
-        enum: ['all', 'public', 'private', 'web'],
-        description:
-          "Defaults to 'all'. 'public' is used when the user is asking about a public API or library. 'private' is used when the user is asking about their own private repo or pdfs. 'web' is use only as a fallback when 'public' has failed.",
-      },
-    },
-    required: ['query'],
-  },
+// Tool configuration based on client type
+type ToolConfig = {
+  searchToolName: string
+  readToolName: string
 }
 
-const READ_TOOL: Tool = {
-  name: 'ref_read_url',
-  description: `A tool that fetches content from a URL and converts it to markdown for easy reading with Ref. 
+const OPENAI_DEEP_RESEARCH_TOOL_CONFIG: ToolConfig = {
+  searchToolName: 'search',
+  readToolName: 'fetch',
+}
 
-This is powerful when used in conjunction with the ref_search_documentation or ref_search_web tool that return urls of relevant content.`,
-  inputSchema: {
-    type: 'object',
-    properties: {
-      url: {
-        type: 'string',
-        description: 'The URL of the webpage to read.',
-      },
-    },
-    required: ['url'],
-  },
+const DEFAULT_TOOL_CONFIG: ToolConfig = {
+  searchToolName: 'ref_search_documentation',
+  readToolName: 'ref_read_url',
 }
 
 // Transport configuration from environment
-const TRANSPORT_TYPE = (process.env.TRANSPORT || "stdio") as "stdio" | "http";
-const HTTP_PORT = parseInt(process.env.PORT || "8080", 10);
+const TRANSPORT_TYPE = (process.env.TRANSPORT || 'stdio') as 'stdio' | 'http'
+const HTTP_PORT = parseInt(process.env.PORT || '8080', 10)
 
 // Global variables to store current request config
-let currentApiKey: string | undefined = undefined;
-let disableSearchWeb: boolean = false;
+let currentApiKey: string | undefined = undefined
+
+// Session management for HTTP transport
+const transports: { [sessionId: string]: StreamableHTTPServerTransport } = {}
+const sessionClientInfo: { [sessionId: string]: string } = {}
+const servers: { [sessionId: string]: Server } = {}
+
+// DeepResearch shape for OpenAI compatibility
+type DeepResearchShape = {
+  id: string
+  title: string
+  text: string
+  url: string
+  metadata?: any
+}
 
 // Function to create a new server instance
-function createServerInstance() {
+function createServerInstance(mcpClient: string = 'unknown', sessionId?: string) {
+  const toolConfig =
+    mcpClient === 'openai-mcp' ? OPENAI_DEEP_RESEARCH_TOOL_CONFIG : DEFAULT_TOOL_CONFIG
+
+  const searchTool: Tool = {
+    name: toolConfig.searchToolName,
+    description: `Search for documentation on the web or github as well from private resources like repos and pdfs. Use Ref '${toolConfig.readToolName}' to read the content of a url.`,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        query: {
+          type: 'string',
+          description: `Query for documentation. Should include programming language and framework or library names. Searches public only docs by default, include ref_src=private to search a user's private docs.`,
+        },
+      },
+      required: ['query'],
+    },
+  }
+
+  const readTool: Tool = {
+    name: toolConfig.readToolName,
+    description: `Read the content of a url as markdown. The entire exact URL from a Ref '${toolConfig.searchToolName}' result should be passed to this tool to read it.`,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        url: {
+          type: 'string',
+          description: 'The URL of the webpage to read.',
+        },
+      },
+      required: ['url'],
+    },
+  }
+
   const server = new Server(
     {
       name: 'Ref',
-      version: '2.0.0',
+      version: '3.0.0',
     },
     {
       capabilities: {
@@ -89,9 +108,9 @@ function createServerInstance() {
     },
   )
 
-  // Register existing request handlers
+  // Register request handlers
   server.setRequestHandler(ListToolsRequestSchema, async () => ({
-    tools: [SEARCH_DOCUMENTATION_TOOL, READ_TOOL],
+    tools: [searchTool, readTool],
   }))
 
   server.setRequestHandler(ListPromptsRequestSchema, async () => ({
@@ -115,7 +134,8 @@ function createServerInstance() {
         arguments: [
           {
             name: 'query',
-            description: 'The rest of your prompt or question you want informed by your private docs',
+            description:
+              'The rest of your prompt or question you want informed by your private docs',
             required: true,
           },
         ],
@@ -138,7 +158,7 @@ function createServerInstance() {
             role: 'user',
             content: {
               type: 'text',
-              text: `${query}\n\nRemember to check the docs with ref`,
+              text: `${query}\n\nSearch ref with source=public`,
             },
           },
         ],
@@ -157,7 +177,7 @@ function createServerInstance() {
             role: 'user',
             content: {
               type: 'text',
-              text: `${query}\n\nSearch my private docs with ref`,
+              text: `${query}\n\nSearch ref with source=private`,
             },
           },
         ],
@@ -168,19 +188,17 @@ function createServerInstance() {
   })
 
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
-    if (request.params.name === SEARCH_DOCUMENTATION_TOOL.name) {
+    if (request.params.name === toolConfig.searchToolName) {
       console.error('[search_documentation] arguments', request.params.arguments)
       const input = request.params.arguments as {
         query: string
-        keyWords?: string[]
-        source?: string
       }
-      return doSearch(input.query, input.keyWords, input.source)
+      return doSearch(input.query, mcpClient, sessionId)
     }
 
-    if (request.params.name === READ_TOOL.name) {
+    if (request.params.name === toolConfig.readToolName) {
       const input = request.params.arguments as { url: string }
-      return doRead(input.url)
+      return doRead(input.url, mcpClient, sessionId)
     }
 
     throw new McpError(ErrorCode.MethodNotFound, `Could not find tool: ${request.params.name}`)
@@ -205,34 +223,38 @@ const getApiKey = () => {
   return process.env.REF_ALPHA || process.env.REF_API_KEY || currentApiKey
 }
 
-// Helper function to get auth headers
-const getAuthHeaders = () => {
+// Helper function to get auth headers with session support
+const getAuthHeaders = (sessionId?: string) => {
+  const headers: Record<string, string | undefined> = {
+    'X-Ref-Alpha':
+      process.env.REF_ALPHA ||
+      (currentApiKey && !process.env.REF_API_KEY ? currentApiKey : undefined),
+    'X-Ref-Api-Key':
+      process.env.REF_API_KEY ||
+      (currentApiKey && !process.env.REF_ALPHA ? currentApiKey : undefined),
+  }
+
+  if (sessionId) {
+    headers['mcp-session-id'] = sessionId
+  }
+
+  return headers
+}
+
+function toDeepResearchShape(doc: any): DeepResearchShape {
   return {
-    'X-Ref-Alpha': process.env.REF_ALPHA || (currentApiKey && !process.env.REF_API_KEY ? currentApiKey : undefined),
-    'X-Ref-Api-Key': process.env.REF_API_KEY || (currentApiKey && !process.env.REF_ALPHA ? currentApiKey : undefined),
+    id: doc.url,
+    title: doc.overview || doc.title || '',
+    text: (doc.content || '').slice(0, 100),
+    url: doc.url,
+    metadata: {
+      moduleId: doc.moduleId,
+    },
   }
 }
 
-let moduleNames: string[] | undefined = undefined
-
-async function doSearch(query: string, keyWords?: string[], source?: string) {
-  // Handle web search through Tavily when source is 'web' (unless disabled)
-  if (source === 'web') {
-    if (disableSearchWeb) {
-      return {
-        content: [{ type: 'text', text: 'Web search is disabled' }],
-      }
-    }
-    return doSearchWeb(query)
-  }
-
-  const url =
-    getRefUrl() +
-    '/search_documentation?query=' +
-    encodeURIComponent(query) +
-    (keyWords && keyWords.length > 0 ? '&keyWords=' + keyWords.join(',') : '') +
-    (source ? '&source=' + source : '') +
-    (moduleNames ? '&moduleNames=' + moduleNames?.join(',') : '')
+async function doSearch(query: string, mcpClient: string = 'unknown', sessionId?: string) {
+  const url = getRefUrl() + '/search_documentation?query=' + encodeURIComponent(query)
   console.error('[search]', url)
 
   if (!getApiKey()) {
@@ -248,7 +270,7 @@ async function doSearch(query: string, keyWords?: string[], source?: string) {
 
   try {
     const response = await axios.get(url, {
-      headers: getAuthHeaders(),
+      headers: getAuthHeaders(sessionId),
     })
     const data = response.data
 
@@ -258,17 +280,26 @@ async function doSearch(query: string, keyWords?: string[], source?: string) {
       }
     }
 
-    return {
-      content: [
-        {
-          type: 'text',
-          text: `Found ${data.docs.length} results for "${query}"\n\n${data.docs.map((result: any) => result.url).join('\n')}`,
-        },
-        ...data.docs.map((result: any) => ({
-          type: 'text',
-          text: JSON.stringify(result),
+    // Return different formats based on client type
+    if (mcpClient === 'openai-mcp') {
+      return {
+        content: [
+          {
+            type: 'text' as const,
+            text: JSON.stringify(data.docs.map(toDeepResearchShape)),
+          },
+        ],
+      }
+    } else {
+      return {
+        content: data.docs.map((doc: any) => ({
+          type: 'text' as const,
+          text: `
+overview: ${doc.overview || ''}
+url: ${doc.url}
+moduleId: ${doc.moduleId || ''}`,
         })),
-      ],
+      }
     }
   } catch (error) {
     console.error('[search-error]', error)
@@ -283,52 +314,7 @@ async function doSearch(query: string, keyWords?: string[], source?: string) {
   }
 }
 
-async function doSearchWeb(query: string) {
-  try {
-    const searchWebUrl = getRefUrl() + '/search_web?query=' + encodeURIComponent(query)
-    console.error('[search_web]', searchWebUrl)
-
-    if (!getApiKey()) {
-      return {
-        content: [
-          {
-            type: 'text',
-            text: 'Ref is not correctly configured. Reach out to hello@ref.tools for help.',
-          },
-        ],
-      }
-    }
-
-    const response = await axios.get(searchWebUrl, {
-      headers: getAuthHeaders(),
-    })
-
-    const data = response.data
-
-    if (!data.docs || data.docs.length === 0) {
-      return {
-        content: [{ type: 'text', text: 'No web search results found' }],
-      }
-    }
-
-    // Format the results to match the endpoint format
-    return {
-      content: data.docs.map((result: any) => ({ type: 'text', text: JSON.stringify(result) })),
-    }
-  } catch (error) {
-    console.error('[search_web-error]', error)
-    return {
-      content: [
-        {
-          type: 'text',
-          text: `Error during web search: ${axios.isAxiosError(error) ? error.message : (error as Error).message}`,
-        },
-      ],
-    }
-  }
-}
-
-async function doRead(url: string) {
+async function doRead(url: string, mcpClient: string = 'unknown', sessionId?: string) {
   try {
     const readUrl = getRefUrl() + '/read?url=' + encodeURIComponent(url)
     console.error('[read]', readUrl)
@@ -345,18 +331,32 @@ async function doRead(url: string) {
     }
 
     const response = await axios.get(readUrl, {
-      headers: getAuthHeaders(),
+      headers: getAuthHeaders(sessionId),
     })
 
     const data = response.data
 
-    return {
-      content: [
-        {
-          type: 'text',
-          text: `Title: ${data.title}\n\n${data.content}`,
-        },
-      ],
+    // Return different formats based on client type
+    if (mcpClient === 'openai-mcp') {
+      const result: DeepResearchShape = {
+        id: url,
+        title: data.title || '',
+        text: data.content || '',
+        url,
+      }
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(result),
+          },
+        ],
+      }
+    } else {
+      return {
+        content: [{ type: 'text', text: data.content || '' }],
+      }
     }
   } catch (error) {
     console.error('[read-error]', error)
@@ -372,85 +372,176 @@ async function doRead(url: string) {
 }
 
 async function main() {
-  const transportType = TRANSPORT_TYPE;
+  const transportType = TRANSPORT_TYPE
 
-  if (transportType === "http") {
+  if (transportType === 'http') {
     const httpServer = createServer(async (req, res) => {
-      const url = new URL(req.url || "", `http://${req.headers.host}`).pathname;
+      const url = new URL(req.url || '', `http://${req.headers.host}`).pathname
 
       // Set CORS headers for all responses
-      res.setHeader("Access-Control-Allow-Origin", "*");
-      res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS,DELETE");
-      res.setHeader("Access-Control-Allow-Headers", "Content-Type, MCP-Session-Id, mcp-session-id");
+      res.setHeader('Access-Control-Allow-Origin', '*')
+      res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS,DELETE')
+      res.setHeader('Access-Control-Allow-Headers', 'Content-Type, MCP-Session-Id, mcp-session-id')
 
       // Handle preflight OPTIONS requests
-      if (req.method === "OPTIONS") {
-        res.writeHead(200);
-        res.end();
-        return;
+      if (req.method === 'OPTIONS') {
+        res.writeHead(200)
+        res.end()
+        return
       }
 
       try {
-        // Extract config from base64-encoded JSON parameter for Smithery compatibility
-        const fullUrl = new URL(req.url || "", `http://${req.headers.host}`);
-        const configParam = fullUrl.searchParams.get('config');
-        
-        if (configParam) {
-          try {
-            const decodedConfig = Buffer.from(configParam, 'base64').toString('utf-8');
-            const config = JSON.parse(decodedConfig);
-            
-            if (config.refApiKey) {
-              currentApiKey = config.refApiKey;
+        if (url === '/mcp') {
+          // Extract client info
+          const userAgentHeader =
+            req.headers['user-agent'] || req.headers['x-mcp-client'] || req.headers['mcp-client']
+          const userAgent: string = Array.isArray(userAgentHeader)
+            ? userAgentHeader[0] || 'unknown'
+            : userAgentHeader || 'unknown'
+
+          // Get body for POST requests
+          let body: any = {}
+          if (req.method === 'POST') {
+            const chunks: Buffer[] = []
+            for await (const chunk of req) {
+              chunks.push(chunk)
             }
-            if (config.disableSearchWeb !== undefined) {
-              disableSearchWeb = Boolean(config.disableSearchWeb);
+            const bodyString = Buffer.concat(chunks).toString()
+            try {
+              body = JSON.parse(bodyString)
+            } catch (e) {
+              // Ignore parse errors
             }
-          } catch (error) {
-            console.error('Failed to parse config parameter:', error);
           }
-        }
 
-        // Create new server instance for each request
-        const requestServer = createServerInstance();
+          const sessionId = req.headers['mcp-session-id'] as string | undefined
+          const mcpClient: string =
+            (sessionId && sessionClientInfo[sessionId]) ||
+            body?.params?.clientInfo?.name ||
+            userAgent.split('/')[0] ||
+            'unknown'
 
-        if (url === "/mcp") {
-          const transport = new StreamableHTTPServerTransport({
-            sessionIdGenerator: undefined,
-          });
-          await requestServer.connect(transport);
-          await transport.handleRequest(req, res);
-        } else if (url === "/ping") {
-          res.writeHead(200, { "Content-Type": "text/plain" });
-          res.end("pong");
+          console.error('MCP REQUEST', {
+            headers: req.headers,
+            method: req.method,
+            url: req.url,
+            sessionId,
+            mcpClient,
+          })
+
+          // Extract config from base64-encoded JSON parameter for Smithery compatibility
+          const fullUrl = new URL(req.url || '', `http://${req.headers.host}`)
+          const configParam = fullUrl.searchParams.get('config')
+
+          if (configParam) {
+            try {
+              const decodedConfig = Buffer.from(configParam, 'base64').toString('utf-8')
+              const config = JSON.parse(decodedConfig)
+
+              if (config.refApiKey) {
+                currentApiKey = config.refApiKey
+              }
+            } catch (error) {
+              console.error('Failed to parse config parameter:', error)
+            }
+          }
+
+          if (req.method === 'POST') {
+            let transport: StreamableHTTPServerTransport
+
+            if (sessionId && transports[sessionId]) {
+              transport = transports[sessionId]
+            } else if (!sessionId && isInitializeRequest(body)) {
+              transport = new StreamableHTTPServerTransport({
+                sessionIdGenerator: () => randomUUID(),
+                enableJsonResponse: true,
+                onsessioninitialized: (newSessionId) => {
+                  sessionClientInfo[newSessionId] = mcpClient
+                  transports[newSessionId] = transport
+                  const server = createServerInstance(mcpClient, newSessionId)
+                  servers[newSessionId] = server
+                  server.connect(transport).catch(console.error)
+                },
+              })
+
+              transport.onclose = () => {
+                if (transport.sessionId) {
+                  delete transports[transport.sessionId]
+                  delete servers[transport.sessionId]
+                  delete sessionClientInfo[transport.sessionId]
+                }
+              }
+            } else {
+              res.writeHead(400, { 'Content-Type': 'application/json' })
+              res.end(
+                JSON.stringify({
+                  jsonrpc: '2.0',
+                  error: {
+                    code: -32000,
+                    message: 'Bad Request: No valid session ID provided',
+                  },
+                  id: null,
+                }),
+              )
+              return
+            }
+
+            await transport.handleRequest(req, res, body)
+          } else if (req.method === 'DELETE') {
+            console.log('DELETE request', transports[req.headers['mcp-session-id'] as string])
+            const sessionId = req.headers['mcp-session-id'] as string | undefined
+            if (sessionId && transports[sessionId]) {
+              await transports[sessionId].close()
+              console.log('closed transport', sessionId)
+              res.writeHead(200)
+              res.end()
+              return
+            } else {
+              res.writeHead(400, { 'Content-Type': 'application/json' })
+              res.end(
+                JSON.stringify({
+                  jsonrpc: '2.0',
+                  error: {
+                    code: -32000,
+                    message: 'Bad Request: No valid session ID provided',
+                  },
+                  id: null,
+                }),
+              )
+            }
+          } else {
+            res.writeHead(405, { 'Content-Type': 'application/json' })
+            res.end(JSON.stringify({ error: 'Method not allowed' }))
+          }
+        } else if (url === '/ping') {
+          res.writeHead(200, { 'Content-Type': 'text/plain' })
+          res.end('pong')
         } else {
-          res.writeHead(404);
-          res.end("Not found");
+          res.writeHead(404)
+          res.end('Not found')
         }
       } catch (error) {
-        console.error("Error handling request:", error);
+        console.error('Error handling request:', error)
         if (!res.headersSent) {
-          res.writeHead(500);
-          res.end("Internal Server Error");
+          res.writeHead(500)
+          res.end('Internal Server Error')
         }
       } finally {
         // Clear config after request processing
-        currentApiKey = undefined;
-        disableSearchWeb = false;
+        currentApiKey = undefined
       }
-    });
+    })
 
     httpServer.listen(HTTP_PORT, () => {
-      console.error(
-        `Ref MCP Server running on HTTP at http://localhost:${HTTP_PORT}/mcp`
-      );
-    });
+      console.error(`Ref MCP Server running on HTTP at http://localhost:${HTTP_PORT}/mcp`)
+    })
   } else {
     // Stdio transport (default)
-    const server = createServerInstance();
-    const transport = new StdioServerTransport();
-    await server.connect(transport);
-    console.error("Ref MCP Server running on stdio");
+    const sessionId = randomUUID()
+    const server = createServerInstance('ref-tools-mcp-stdio', sessionId)
+    const transport = new StdioServerTransport()
+    await server.connect(transport)
+    console.error('Ref MCP Server running on stdio')
   }
 }
 
