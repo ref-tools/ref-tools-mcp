@@ -7,9 +7,52 @@ A [ModelContextProtocol](https://modelcontextprotocol.io) server that gives your
 
 For more see info [ref.tools](https://ref.tools)
 
+## Agentic search for exactly the right context
+
+Ref's tools are design to match how models search while using as little context as possible to reduce [context rot](https://research.trychroma.com/context-rot). The goal is to find exactly the context your coding agent needs to be successful while using minimum tokens.
+
+Depending on the complexity of the prompt, LLM coding agents like Claude Code will typically do one or more searches and then choose a few resources to read in more depth.
+
+For a simple query about Figma's Comment REST API it will make a couple calls to get exactly what it needs:
+```
+SEARCH 'Figma API post comment endpoint documentation' (54 tokens)
+READ https://www.figma.com/developers/api#post-comments-endpoint (385 tokens)
+```
+
+For more complex situations, the LLM will try to refine it's prompt as it reads results. For example:
+```
+SEARCH 'n8n merge node vs Code node multiple inputs best practices' (126)
+READ https://docs.n8n.io/integrations/builtin/core-nodes/n8n-nodes-base.merge/#merge (4961)
+READ https://docs.n8n.io/flow-logic/merging/#merge-data-from-multiple-node-executions (138)
+SEARCH 'n8n Code node multiple inputs best practices when to use' (107)
+READ https://docs.n8n.io/code/code-node/#usage (80)
+SEARCH 'n8n Code node access multiple inputs from different nodes' (370)
+SEARCH 'n8n Code node $input access multiple node inputs' (372)
+READ https://docs.n8n.io/code/builtin/output-other-nodes/#output-of-other-nodes (2310)
+  ```
+
+Ref takes advantage of MCP sessions to track search trajectory and minimize context usage. There's a lot more ideas cooking but here's what we've implemented so far.
+
+### 1. Filtering search results
+For repeated similar searches in a session, Ref will never return repeated results. Traditionally, you dig farther in to search results by paging to the next result but this approach allows the agent to page AND adjust the prompt at the same time.
+
+### 2. Fetching the part of the page that matters
+When reading a page of documentation, Ref will use the agent's session search history to dropout less relevant sections and return the most relevant 5k tokens. This helps Ref avoid a big problem with standard `fetch()` web scraping which is when it hits a large documentation page you can easily end up pull in 20k+ tokens into context, most of which are irrelevant. 
+
+## Why does minimizing tokens from documentation context matter?
+
+### 1. More context makes models dumber
+
+It's well documented that as of July 2025 that models get dumber as you put in more tokens. You might have heard about how models are great with long context now and that's kind of true but not the whole picture. For a quick primer on some research, [checkout this video from the team at Chroma](https://www.youtube.com/watch?v=TUjQuC4ugak).
+
+### 2. Tokens cost $$$
+
+Imagine you are using Claude Opus as a background agent and you start by having the agent pull in documentation context and suppose it pulls in 10000 tokens of context with 4000 being relevant and 6000 being extra noise. At API pricing, that 6k tokens cost about $0.09 PER STEP. If one prompt ends up taking 11 steps with Opus, you've spent $1 for no reason. 
+
+
 ## Setup
 
-There are two options for setting up Ref as an MCP server, either via the streamable-http server (experimental) or local stdio server. 
+There are two options for setting up Ref as an MCP server, either via the streamable-http server (recommended) or local stdio server (legacy). 
 
 This repo contains the legacy stdio server. 
 
@@ -19,14 +62,8 @@ This repo contains the legacy stdio server.
 
 ```
 "Ref": {
-    "command": "npx",
-    "args": [
-      "-y",
-      "mcp-remote@0.1.0-0",
-      "https://api.ref.tools/mcp",
-      "--header=x-ref-api-key:<sign up to get an api key>"
-    ]
-  }
+  "type": "http",
+  "url": "https://api.ref.tools/mcp?apiKey=YOUR_API_KEY"
 }
 ```
 
@@ -37,17 +74,12 @@ This repo contains the legacy stdio server.
 ```
 "Ref": {
   "command": "npx",
-  "args": ["ref-tools-mcp"],
+  "args": ["ref-tools-mcp@latest"],
   "env": {
     "REF_API_KEY": <sign up to get an api key>
   }
 }
 ```
-
-
-As of April 2025, MCP supports streamable HTTP servers. Ref implements this but not all clients support it yet so the most reliable approach is to use `mcp-remote` as a local proxy. If you know your client supports streamable HTTP servers, feel free to use https://api.ref.tools/mcp directly.
-
-Note for former alpha users: `REF_ALPHA` config is still supported. You'll be notified if you need to update.
 
 ## Tools
 
@@ -59,10 +91,6 @@ A powerful search tool to check technical documentation. Great for finding facts
 
 **Parameters:**
 - `query` (required): Query to search for relevant documentation. This should be a full sentence or question.
-- `keyWords` (optional): A list of keywords to use for the search like you would use for grep.
-- `source` (optional): Defaults to 'all'. 'public' is used when the user is asking about a public API or library. 'private' is used when the user is asking about their own private repo or pdfs. 'web' is use only as a fallback when 'public' has failed.
-
-**Note:** When `source` is set to 'web', this tool will perform web search to find relevant information online.
 
 ### ref_read_url
 
@@ -70,6 +98,16 @@ A tool that fetches content from a URL and converts it to markdown for easy read
 
 **Parameters:**
 - `url` (required): The URL of the webpage to read.
+
+
+## OpenAI deep research support
+
+Ref can be used as a source for deep research. OpenAI requires specific tool definitions so when used with an OpenAI client, Ref will provide the same tools with slightly different naming.
+
+```
+ref_search_documentation(query) -> search(query)
+ref_read_url(url) -> fetch(id)
+```
 
 ## Development
 
