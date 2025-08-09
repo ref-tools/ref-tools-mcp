@@ -2,7 +2,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { chunkCodebase, type Chunk } from './chunker'
+import { chunkCodebase, type Chunk } from './src/chunker'
 
 export type CliFormat = 'json' | 'human'
 
@@ -21,14 +21,20 @@ export function toHumanReadable(chunks: Chunk[], opts?: { relativeTo?: string })
     lines.push(`File: ${rel(file)}  (chunks: ${arr.length})`)
     for (const c of arr) {
       const name = c.name ? ` ${c.name}` : ''
-      lines.push(`  • [${c.language}] ${c.type}${name} @ ${c.line}-${c.endLine} #${c.id.slice(0,8)}`)
+      lines.push(
+        `  • [${c.language}] ${c.type}${name} @ ${c.line}-${c.endLine} #${c.id.slice(0, 8)}`,
+      )
     }
     lines.push('')
   }
   return lines.join('\n')
 }
 
-export function writeJsonChunks(outFile: string, chunks: Chunk[], options?: { format?: 'jsonl' | 'array'; pretty?: boolean }) {
+export function writeJsonChunks(
+  outFile: string,
+  chunks: Chunk[],
+  options?: { format?: 'jsonl' | 'array'; pretty?: boolean },
+) {
   const fmt = options?.format ?? 'jsonl'
   const pretty = options?.pretty ? 2 : undefined
   if (fmt === 'array') {
@@ -119,4 +125,3 @@ if (isDirectRun) {
 }
 
 export default run
-

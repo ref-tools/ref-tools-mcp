@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll } from 'vitest'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { chunkCodebase, chunkFile, type Chunk } from '../src/chunker'
+import { chunkCodebase, chunkFile, type Chunk } from './chunker'
 
 function write(dir: string, rel: string, content: string) {
   const abs = path.join(dir, rel)
@@ -57,18 +57,10 @@ describe('chunker by language', () => {
     )
 
     // Ruby
-    write(
-      tmp,
-      'rb/example.rb',
-      `class Foo\n  def bar(x, y)\n    x + y\n  end\nend\n`,
-    )
+    write(tmp, 'rb/example.rb', `class Foo\n  def bar(x, y)\n    x + y\n  end\nend\n`)
 
     // C
-    write(
-      tmp,
-      'c/example.c',
-      `#include <stdio.h>\nint add(int a, int b) { return a + b; }\n`,
-    )
+    write(tmp, 'c/example.c', `#include <stdio.h>\nint add(int a, int b) { return a + b; }\n`)
   })
 
   it('chunks JavaScript with classes and functions', async () => {
@@ -81,7 +73,9 @@ describe('chunker by language', () => {
     expect(cls.content).toContain('class Greeter')
     expect(fn.content).toContain('function topLevel')
     const fileChunk = findChunk(chunks, (c) => c.type === 'file')
-    expect(fileChunk.relations.some((r) => r.type === 'contains' && r.targetId === cls.id)).toBe(true)
+    expect(fileChunk.relations.some((r) => r.type === 'contains' && r.targetId === cls.id)).toBe(
+      true,
+    )
   })
 
   it('chunks TypeScript with classes and functions', async () => {
@@ -146,4 +140,3 @@ describe('chunker by language', () => {
     expect(hasContains).toBe(true)
   })
 })
-

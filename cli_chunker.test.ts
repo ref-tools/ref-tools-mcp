@@ -2,8 +2,8 @@ import { describe, it, expect } from 'vitest'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { chunkCodebase } from '../src/chunker'
-import { readJsonChunks, writeJsonChunks, toHumanReadable } from '../src/cli'
+import { chunkCodebase } from './chunker'
+import { readJsonChunks, writeJsonChunks, toHumanReadable } from './cli_chunker'
 
 function tmpDir(prefix = 'chunker-cli-') {
   return fs.mkdtempSync(path.join(os.tmpdir(), prefix))
@@ -38,10 +38,7 @@ class Box { constructor(v){ this.v = v } }
   it('writes and reads JSON array correctly', async () => {
     const dir = tmpDir()
     const file = path.join(dir, 'sample.py')
-    fs.writeFileSync(
-      file,
-      `def hi(x):\n    return x\n\nclass C:\n    pass\n`,
-    )
+    fs.writeFileSync(file, `def hi(x):\n    return x\n\nclass C:\n    pass\n`)
 
     const chunks = await chunkCodebase(dir, { languages: ['python'] })
     const out = path.join(dir, 'chunks.json')
@@ -66,4 +63,3 @@ describe('CLI helpers human mode', () => {
     expect(text.split('\n').length).toBeGreaterThan(1)
   })
 })
-
