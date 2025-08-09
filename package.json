@@ -5,8 +5,8 @@
   "type": "module",
   "module": "index.ts",
   "scripts": {
-    "make-executable": "node -e \"fs.chmodSync('dist/index.cjs', '755');\" --require fs",
-    "build": "esbuild index.ts --outfile=dist/index.cjs --bundle --platform=node --format=cjs --banner:js='#!/usr/bin/env node' && npm run make-executable",
+    "make-executable": "node -e \"fs.chmodSync('dist/index.cjs', '755'); fs.chmodSync('dist/chunker.mjs', '755');\" --require fs",
+    "build": "esbuild index.ts --outfile=dist/index.cjs --bundle --platform=node --format=cjs --banner:js='#!/usr/bin/env node' && esbuild src/cli.ts --outfile=dist/chunker.mjs --bundle --platform=node --format=esm --banner:js='#!/usr/bin/env node' --external:tree-sitter* && npm run make-executable",
     "watch": "esbuild index.ts --outfile=dist/index.cjs --bundle --platform=node --format=cjs --banner:js='#!/usr/bin/env node' --watch",
     "inspect": "npx @modelcontextprotocol/inspector node dist/index.cjs",
     "start:http": "TRANSPORT=http node dist/index.cjs",
@@ -17,7 +17,8 @@
     "prepublishOnly": "npm run build"
   },
   "bin": {
-    "ref-tools-mcp": "./dist/index.cjs"
+    "ref-tools-mcp": "./dist/index.cjs",
+    "code-chunker": "./dist/chunker.mjs"
   },
   "files": [
     "dist"
