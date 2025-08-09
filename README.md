@@ -129,9 +129,12 @@ A simple benchmark harness is included to ingest several popular open-source rep
 
   - `npm run bench:viz`
 
-  Opens a minimal static viewer at `bench/viewer/index.html` that polls `bench/results/index.json` every 2 seconds to reflect new runs automatically.
+  Opens a minimal static viewer at `bench/viewer/index.html` that auto-refreshes and shows per-repo summaries plus per-query charts with error bars (mean ± stdev). It reacts to new runs automatically.
 
 Repos used by default (small to medium): chalk, axios, date-fns, express. You can pre-clone your own into `../bench_repos/<name>` and extend the list in `cli_bench.ts`.
+
+Per-repo SearchDB queries are realistic and domain-specific (10 each).
+GraphDB queries cover structural counts (files/chunks by language/type, size thresholds, and edges) to exercise pattern and filter performance.
 
 ```
 npm install

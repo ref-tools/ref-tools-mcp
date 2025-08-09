@@ -132,19 +132,106 @@ function buildGraphForChunks(db: GraphDB, chunks: Chunk[]) {
   }
 }
 
-type QueryResult = { label: string; times: number[]; avg: number; median: number; p95: number }
+type QueryResult = {
+  label: string
+  times: number[]
+  mean: number
+  median: number
+  p95: number
+  stdev: number
+  sem: number
+  ci95: number
+  min: number
+  max: number
+}
 
 function summarize(times: number[], label: string): QueryResult {
-  return {
-    label,
-    times,
-    avg: times.reduce((a, b) => a + b, 0) / Math.max(1, times.length),
-    median: median(times),
-    p95: p95(times),
+  const n = Math.max(1, times.length)
+  const mean = times.reduce((a, b) => a + b, 0) / n
+  const variance =
+    times.reduce((acc, t) => acc + Math.pow(t - mean, 2), 0) / (times.length > 1 ? times.length - 1 : 1)
+  const stdev = Math.sqrt(variance)
+  const sem = stdev / Math.sqrt(n)
+  const ci95 = 1.96 * sem
+  const min = Math.min(...times)
+  const max = Math.max(...times)
+  return { label, times, mean, median: median(times), p95: p95(times), stdev, sem, ci95, min, max }
+}
+
+function queriesForRepo(repo: string): string[] {
+  // 10 realistic text queries per repo for SearchDB
+  switch (repo) {
+    case 'chalk':
+      return [
+        'ansi color styles',
+        'rgb hex color',
+        'bold underline',
+        'chalk instance factory',
+        'template literal tag',
+        'supportsColor level',
+        'strip ansi escape',
+        'tty detection',
+        'typescript types',
+        'browser build',
+      ]
+    case 'axios':
+      return [
+        'request interceptor',
+        'response interceptor',
+        'cancel token abort',
+        'xhr adapter',
+        'http proxy agent',
+        'timeout error',
+        'transform request',
+        'default headers',
+        'form data',
+        'baseURL config',
+      ]
+    case 'express':
+      return [
+        'middleware next function',
+        'router param',
+        'static file serve',
+        'req res object',
+        'app listen port',
+        'error handler',
+        'json body parser',
+        'template engine',
+        'cookie parser',
+        'route path',
+      ]
+    case 'date-fns':
+    case 'datefns':
+    case 'date_fns':
+      return [
+        'format date',
+        'parse ISO',
+        'add days',
+        'difference in days',
+        'start of week',
+        'end of month',
+        'is valid',
+        'compare asc',
+        'each day of interval',
+        'locale enUS',
+      ]
+    default:
+      return [
+        'init function',
+        'config options',
+        'error handling',
+        'http client',
+        'plugin system',
+        'typescript types',
+        'class constructor',
+        'utility helpers',
+        'parser',
+        'encoder',
+      ]
   }
 }
 
-async function benchSearchDB(chunks: Chunk[], iterations = 5) {
+async function benchSearchDB(repoName: string, chunks: Chunk[], iterations = 5) {
   const search = new SearchDB()
   const t0 = nowNs()
   await search.addChunks(chunks)
@@ -152,21 +239,18 @@ async function benchSearchDB(chunks: Chunk[], iterations = 5) {
   const indexTimeMs = msBetween(t0, t1)
 
   const queries: { [name: string]: QueryResult } = {}
-  const qdefs: { name: string; q: string }[] = [
-    { name: 'q_import', q: 'import module' },
-    { name: 'q_class', q: 'class method' },
-    { name: 'q_http', q: 'http request response' },
-  ]
-  for (const { name, q } of qdefs) {
+  const qlist = queriesForRepo(repoName)
+  qlist.forEach((q, i) => (queries[`q${i + 1}`] = { label: q, times: [], mean: 0, median: 0, p95: 0, stdev: 0, sem: 0, ci95: 0, min: 0, max: 0 }))
+  for (const [name, meta] of Object.entries(queries)) {
     const times: number[] = []
     for (let i = 0; i < iterations; i++) {
       const s = nowNs()
       // eslint-disable-next-line no-await-in-loop
-      await search.search(q)
+      await search.search(meta.label)
       const e = nowNs()
       times.push(msBetween(s, e))
     }
-    queries[name] = summarize(times, q)
+    queries[name] = summarize(times, meta.label)
   }
   return { indexTimeMs, queries }
 }
@@ -183,7 +267,13 @@ async function benchGraphDB(chunks: Chunk[], iterations = 5) {
     { name: 'count_files', cypher: 'MATCH (f:File) RETURN count(f) AS count' },
     { name: 'count_chunks', cypher: 'MATCH (c:Chunk) RETURN count(c) AS count' },
     { name: 'contains_edges', cypher: 'MATCH (a:File)-[:CONTAINS]->(b:Chunk) RETURN count(b) AS count' },
-    { name: 'large_chunks', cypher: 'MATCH (c:Chunk) WHERE c.lineCount >= 50 RETURN count(c) AS count' },
+    { name: 'large_chunks_50', cypher: 'MATCH (c:Chunk) WHERE c.lineCount >= 50 RETURN count(c) AS count' },
+    { name: 'large_chunks_200', cypher: 'MATCH (c:Chunk) WHERE c.lineCount >= 200 RETURN count(c) AS count' },
+    { name: 'js_chunks', cypher: "MATCH (c:Chunk) WHERE c.language = 'javascript' RETURN count(c) AS count" },
+    { name: 'ts_chunks', cypher: "MATCH (c:Chunk) WHERE c.language = 'typescript' RETURN count(c) AS count" },
+    { name: 'tsx_chunks', cypher: "MATCH (c:Chunk) WHERE c.language = 'tsx' RETURN count(c) AS count" },
+    { name: 'classes', cypher: "MATCH (c:Chunk) WHERE c.type = 'class_declaration' RETURN count(c) AS count" },
+    { name: 'methods', cypher: "MATCH (c:Chunk) WHERE c.type = 'method_definition' RETURN count(c) AS count" },
   ]
   for (const { name, cypher } of statements) {
     const times: number[] = []
@@ -231,7 +321,7 @@ async function cmdRun() {
     console.log(` - ${numFiles} files -> ${numChunks} chunks (${chunkTimeMs.toFixed(1)} ms)`)
 
     console.log(`SearchDB bench for ${r.name} ...`)
-    const sres = await benchSearchDB(chunks, iterations)
+    const sres = await benchSearchDB(r.name, chunks, iterations)
 
     console.log(`GraphDB bench for ${r.name} ...`)
     const gres = await benchGraphDB(chunks, iterations)
@@ -311,22 +401,51 @@ const VIEWER_HTML = `<!doctype html>
       table { border-collapse: collapse; width: 100%; font-size: 13px; }
       th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid rgba(127,127,127,.2); }
       .bar { height: 10px; background: linear-gradient(90deg, #6ee7b7, #3b82f6); border-radius: 6px; }
+      .bar-wrap { position: relative; height: 12px; background: rgba(127,127,127,.12); border-radius: 6px; overflow: hidden; }
+      .bar-mean { position: absolute; left: 0; top: 1px; bottom: 1px; background: linear-gradient(90deg, #60a5fa, #22d3ee); border-radius: 6px; }
+      .bar-err { position: absolute; top: 0; bottom: 0; background: rgba(0,0,0,.25); }
       .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
       @media (max-width: 720px) { .grid { grid-template-columns: 1fr; } }
       code { background: rgba(127,127,127,.12); padding: 1px 4px; border-radius: 4px; }
+      .section-title { font-weight: 600; margin: 12px 0 6px; }
+      .qrow { display: grid; grid-template-columns: 180px 1fr 120px; gap: 8px; align-items: center; padding: 4px 0; }
+      .qhead { font-size: 12px; color: #666; }
     </style>
   </head>
   <body>
     <h1>GraphDB vs SearchDB — Benchmarks</h1>
-    <div class="muted">Polls results/index.json every 2s. Drop new runs to update.</div>
+    <div class="muted">Polls results every 2s. Drop new runs to update automatically.</div>
     <div id="content"></div>
     <script>
       async function fetchJSON(p) { try { const r = await fetch(p + '?_=' + Date.now()); if (!r.ok) return null; return r.json(); } catch { return null } }
       function fmt(n){ return typeof n==='number'? n.toFixed(1): n }
-      function renderIndex(idx){
+      function clamp01(x){ return Math.max(0, Math.min(1, x)) }
+      function renderBars(queries){
+        const entries = Object.entries(queries||{})
+        if (!entries.length) return '<div class="muted">No query data</div>'
+        const means = entries.map(([k,v])=>v.mean||0)
+        const maxMean = Math.max(...means, 1)
+        let html = ''
+        html += '<div class="qrow qhead"><div>Query</div><div>Latency (ms)</div><div>mean ± stdev</div></div>'
+        for (const [key, v] of entries){
+          const w = clamp01((v.mean||0)/maxMean)*100
+          const errL = clamp01(((v.mean - v.stdev)/maxMean))*100
+          const errW = clamp01((2*v.stdev)/maxMean)*100
+          html += '<div class="qrow">'
+          html += '<div>' + (v.label||key) + '</div>'
+          html += '<div class="bar-wrap"><div class="bar-mean" style="width:'+w+'%"></div>'
+          html += '<div class="bar-err" style="left:'+errL+'%; width:'+errW+'%"></div></div>'
+          html += '<div>' + fmt(v.mean) + ' ± ' + fmt(v.stdev) + '</div>'
+          html += '</div>'
+        }
+        return html
+      }
+      async function render(){
+        const idx = await fetchJSON('../results/index.json')
         const container = document.getElementById('content');
         if (!idx || !idx.length) { container.innerHTML = '<p>No runs yet. Run <code>npm run bench:run</code>.</p>'; return }
         const last = idx[idx.length-1]
+        const run = await fetchJSON('../results/' + last.runId + '.json')
         let html = ''
         html += '<div class="row">'
         html += '<div class="card"><div class="muted">Latest run</div>'
@@ -337,24 +456,24 @@ const VIEWER_HTML = `<!doctype html>
         html += '<div class="row">'
         for (const r of last.repos) {
           const maxBuild = Math.max(r.searchdb_index_ms||0, r.graphdb_build_ms||0, 1)
-          html += '<div class="card" style="flex:1">'
+          const repoFull = (run && run.repos || []).find(x=>x.name===r.name) || {}
+          html += '<div class="card" style="flex:1; min-width: 520px">'
           html += '<div style="font-weight:600;margin-bottom:6px">' + r.name + '</div>'
           html += '<div class="muted" style="margin-bottom:8px">chunks: ' + r.numChunks + '</div>'
-          html += '<div class="grid">'
+          html += '<div class="grid" style="margin-bottom:10px">'
           html += '<div>SearchDB index: '+ fmt(r.searchdb_index_ms) +' ms<div class="bar" style="width:'+(r.searchdb_index_ms/maxBuild*100)+'%"></div></div>'
           html += '<div>GraphDB build: '+ fmt(r.graphdb_build_ms) +' ms<div class="bar" style="width:'+(r.graphdb_build_ms/maxBuild*100)+'%"></div></div>'
           html += '</div>'
+          html += '<div class="section-title">SearchDB Queries</div>'
+          html += renderBars((repoFull.searchdb||{}).queries)
+          html += '<div class="section-title">GraphDB Queries</div>'
+          html += renderBars((repoFull.graphdb||{}).queries)
           html += '</div>'
         }
         html += '</div>'
-        html += '<div class="muted" style="margin-top:12px">See full run files under bench/results/ for per-query stats.</div>'
         container.innerHTML = html
       }
-      async function tick(){
-        const idx = await fetchJSON('../results/index.json')
-        renderIndex(idx)
-      }
-      tick(); setInterval(tick, 2000)
+      render(); setInterval(render, 2000)
     </script>
   </body>
   </html>`
