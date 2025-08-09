@@ -111,6 +111,31 @@ ref_read_url(url) -> fetch(id)
 
 ## Development
 
+## Benchmarks (GraphDB vs SearchDB)
+
+A simple benchmark harness is included to ingest several popular open-source repos, index them into `GraphDB` and `SearchDB`, run a handful of representative queries, and record latencies.
+
+- Setup sample repos (cloned as a sibling directory `../bench_repos`):
+
+  - `npm run bench:setup`
+
+- Run benchmarks (set `BENCH_ITERS` to adjust per-query iterations; default 5):
+
+  - `BENCH_ITERS=5 npm run bench:run`
+
+  Results are written to `bench/results/` as JSON, and a summary index is maintained at `bench/results/index.json`.
+
+- Visualize results:
+
+  - `npm run bench:viz`
+
+  Opens a minimal static viewer at `bench/viewer/index.html` that auto-refreshes and shows per-repo summaries plus per-query charts with error bars (mean ± stdev). It reacts to new runs automatically.
+
+Repos used by default (small to medium): chalk, axios, date-fns, express. You can pre-clone your own into `../bench_repos/<name>` and extend the list in `cli_bench.ts`.
+
+Per-repo SearchDB queries are realistic and domain-specific (10 each).
+GraphDB queries cover structural counts (files/chunks by language/type, size thresholds, and edges) to exercise pattern and filter performance.
+
 ```
 npm install
 npm run dev
