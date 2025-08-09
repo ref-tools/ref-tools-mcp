@@ -78,7 +78,13 @@ export async function callGenerateUi(args: { message: string; title?: string; th
 function ensureHtmlDocument(maybeHtml: string): string {
   const trimmed = (maybeHtml || '').trim()
   const hasHtmlTag = /<html[\s\S]*?>[\s\S]*<\/html>/i.test(trimmed)
-  if (hasHtmlTag) return trimmed
+  if (hasHtmlTag) {
+    // Inject a small auto-resize script so hosts that support ui-size-change can grow the iframe
+    const resizeScript = `\n<script>(function(){try{var post=function(h){if(window.parent){window.parent.postMessage({type:'ui-size-change',payload:{height:h}},'*')}};var target=document.documentElement;var send=function(){var h=Math.max(target.scrollHeight,document.body?document.body.scrollHeight:0,target.clientHeight);post(h)};var ro=new ResizeObserver(function(entries){entries.forEach(function(e){post(Math.ceil(e.contentRect.height))})});var init=function(){ro.observe(target);send()};if(document.readyState==='complete'||document.readyState==='interactive'){init()}else{window.addEventListener('DOMContentLoaded',init)}}catch(e){}})();</script>`
+    if (/<\/body>/i.test(trimmed)) return trimmed.replace(/<\/body>/i, `${resizeScript}</body>`)
+    if (/<\/html>/i.test(trimmed)) return trimmed.replace(/<\/html>/i, `${resizeScript}</html>`)
+    return trimmed + resizeScript
+  }
   // Wrap partial HTML into a minimal document
   return `<!doctype html>
 <html>
@@ -87,12 +93,14 @@ function ensureHtmlDocument(maybeHtml: string): string {
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <style>
       :root { color-scheme: light dark; }
+      html, body { min-height: 640px; }
       body { font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, sans-serif; margin: 0; padding: 16px; }
-      .container { max-width: 720px; margin: 0 auto; }
+      .container { max-width: 720px; margin: 0 auto; min-height: 640px; }
     </style>
   </head>
   <body>
     <div class="container">${trimmed}</div>
+    <script>(function(){try{var post=function(h){if(window.parent){window.parent.postMessage({type:'ui-size-change',payload:{height:h}},'*')}};var target=document.documentElement;var send=function(){var h=Math.max(target.scrollHeight,document.body?document.body.scrollHeight:0,target.clientHeight);post(h)};var ro=new ResizeObserver(function(entries){entries.forEach(function(e){post(Math.ceil(e.contentRect.height))})});var init=function(){ro.observe(target);send()};if(document.readyState==='complete'||document.readyState==='interactive'){init()}else{window.addEventListener('DOMContentLoaded',init)}}catch(e){}})();</script>
   </body>
 </html>`
 }
