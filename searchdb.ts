@@ -6,7 +6,7 @@ import { type Chunk } from './chunker'
 
 export type Embedder = (text: string) => Promise<number[]>
 export type Labeler = (chunk: Chunk) => Promise<string>
-export type RelevanceFilter = (query: string, items: { id: string; description: string }[]) => Promise<string[]>
+export type RelevanceFilter = (query: string, items: Chunk[]) => Promise<Chunk[]>
 
 export type SearchOptions = {
   knnK?: number
@@ -210,24 +210,29 @@ export class SearchDB {
     // Union
     const uniqueIds = Array.from(new Set([...bm25Candidates, ...knnCandidates]))
 
-    // Final LLM filter on descriptions
+    // Candidate chunks
     const items = uniqueIds
-      .map((id) => {
-        const rec = this.byId.get(id)
-        return rec ? { id, description: rec.description } : undefined
-      })
-      .filter((x): x is { id: string; description: string } => !!x)
-    const filter = this.opts.relevanceFilter || defaultRelevanceFilter
-    let keepIds: string[]
-    try {
-      keepIds = await filter(query, items)
-    } catch {
-      keepIds = uniqueIds
-    }
-
-    return keepIds
       .map((id) => this.byId.get(id)?.chunk)
       .filter((c): c is Chunk => !!c)
+
+    // Final relevance filter over chunks if provided
+    const filter = this.opts.relevanceFilter
+    if (filter) {
+      try {
+        const filtered = await filter(query, items)
+        return filtered
+      } catch {
+        // fall through to default
+      }
+    }
+
+    // Default heuristic: keep chunks sharing query tokens in name/content
+    const q = new Set(tokenize(query))
+    const filtered = items.filter((c) => {
+      const hay = `${c.name ?? ''} ${c.content}`.toLowerCase()
+      return Array.from(q).some((t) => hay.includes(t))
+    })
+    return filtered.length ? filtered : items
   }
 }
 
@@ -238,7 +243,7 @@ function sha256Hex(input: string): string {
   return crypto.createHash('sha256').update(input).digest('hex')
 }
 
-async function defaultLabeler(chunk: Chunk): Promise<string> {
+export async function defaultLabeler(chunk: Chunk): Promise<string> {
   // Heuristic fallback if network is unavailable; include function name if present
   const name = chunk.name ? ` ${chunk.name}` : ''
   const base = `Code${name} in ${path.basename(chunk.filePath)} lines ${chunk.line}-${chunk.endLine}`
@@ -246,7 +251,7 @@ async function defaultLabeler(chunk: Chunk): Promise<string> {
   return base.split(/\s+/).slice(0, 30).join(' ')
 }
 
-async function defaultEmbedder(text: string): Promise<number[]> {
+export async function defaultEmbedder(text: string): Promise<number[]> {
   // Simple deterministic embedding: hashing into a fixed-size vector
   const dim = 64
   const vec = new Array<number>(dim).fill(0)
@@ -262,21 +267,4 @@ async function defaultEmbedder(text: string): Promise<number[]> {
   return vec
 }
 
-async function defaultRelevanceFilter(
-  query: string,
-  items: { id: string; description: string }[],
-): Promise<string[]> {
-  const q = new Set(tokenize(query))
-  const out: string[] = []
-  for (const it of items) {
-    const d = new Set(tokenize(it.description))
-    let ok = false
-    for (const term of q) if (d.has(term)) {
-      ok = true
-      break
-    }
-    if (ok) out.push(it.id)
-  }
-  // If nothing matched, return everything to avoid empty results
-  return out.length ? out : items.map((i) => i.id)
-}
+// Default relevance is implemented inline in search()

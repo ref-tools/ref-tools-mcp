@@ -13,6 +13,7 @@
     "dev": "concurrently \"npm run watch\" \"npm run inspect\"",
     "test": "vitest run",
     "check": "tsc --noEmit",
+    "searchdb:cli": "tsx cli_searchdb.ts",
     "pre-commit": "npm run check",
     "prepublishOnly": "npm run build"
   },

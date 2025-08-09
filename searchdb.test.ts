@@ -113,16 +113,14 @@ describe('SearchDB', () => {
     expect(ids).toContain('k')
   })
 
-  it('final relevance filter applies to descriptions', async () => {
-    const relevanceFilter: RelevanceFilter = async (query, items) => {
+  it('final relevance filter can refine chunk candidates', async () => {
+    const relevanceFilter: RelevanceFilter = async (query, chunks) => {
       void query
-      // Keep only items whose description includes 'alpha'
-      const keep = items.filter((i) => /alpha/i.test(i.description)).map((i) => i.id)
-      return keep
+      // Keep only items whose content includes 'alpha'
+      return chunks.filter((c) => /\balpha\b/i.test(c.content))
     }
-    const labeler: Labeler = async (chunk) => (chunk.id === 'x' ? 'alpha handler' : 'beta handler')
-    const db = new SearchDB({ cachePath, embedder: countEmbedder, labeler, relevanceFilter })
-    const x = mkChunk('x', 'something')
+    const db = new SearchDB({ cachePath, embedder: countEmbedder, labeler: async () => 'desc', relevanceFilter })
+    const x = mkChunk('x', 'alpha something')
     const y = mkChunk('y', 'other')
     await db.addChunks([x, y])
     const res = await db.search('alpha query', { bm25K: 2, knnK: 2 })
