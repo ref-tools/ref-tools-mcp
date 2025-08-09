@@ -10,5 +10,12 @@ export default defineConfig({
   root,
   test: {
     globals: true,
+    coverage: {
+      provider: 'v8',
+      reportsDirectory: './coverage',
+      reporter: ['text', 'html', 'lcov'],
+      all: false,
+      exclude: ['dist/**'],
+    },
   },
 })
