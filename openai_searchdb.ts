@@ -7,7 +7,7 @@ import type { ChunkAnnotator, Annotation } from './searchdb'
 
 export type OpenAIAnnotatorOptions = {
   apiKey: string
-  labelModel?: string // e.g., 'gpt5-nano'
+  labelModel?: string // e.g., 'gpt-5-nano'
   embedModel?: string // e.g., 'text-embedding-3-small'
   cachePath?: string // defaults to ~/.ref/search-cache.json
 }
@@ -43,7 +43,7 @@ function sha256Hex(input: string): string {
 
 export function makeOpenAIAnnotator(opts: OpenAIAnnotatorOptions): ChunkAnnotator {
   const apiKey = opts.apiKey
-  const labelModel = opts.labelModel || 'gpt5-nano'
+  const labelModel = opts.labelModel || 'gpt-5-nano'
   const embedModel = opts.embedModel || 'text-embedding-3-small'
   const cacheFile = opts.cachePath || defaultCachePath()
   let cache = readCache(cacheFile)
@@ -64,7 +64,10 @@ export function makeOpenAIAnnotator(opts: OpenAIAnnotatorOptions): ChunkAnnotato
     })
     if (!res.ok) throw new Error(`OpenAI label error: ${res.status} ${await res.text()}`)
     const data: any = await res.json()
-    const text: string = data.output_text || data.content?.[0]?.text || data.choices?.[0]?.message?.content || ''
+    const text: string = data.output
+      .filter((o: any) => o.type === 'message')
+      .map((o: any) => o.content.map((c: any) => c.text).join(''))
+      .join('\n')
     return text.trim().split(/\s+/).slice(0, 30).join(' ')
   }
 
@@ -88,7 +91,10 @@ export function makeOpenAIAnnotator(opts: OpenAIAnnotatorOptions): ChunkAnnotato
     async labelAndEmbed(chunk: Chunk): Promise<Annotation> {
       const key = chunk.contentHash || sha256Hex(chunk.content)
       const hit = cache[key]
-      if (hit) return hit
+      if (hit) {
+        console.log('OpenAI cache hit for', key)
+        return hit
+      }
       const description = await openaiLabel(chunk)
       const combined = `${description}\n\n${chunk.content}`
       const embedding = await openaiEmbed(combined)

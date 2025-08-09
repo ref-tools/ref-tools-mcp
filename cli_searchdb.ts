@@ -38,15 +38,17 @@ function parseArgs(argv: string[]): Args {
 }
 
 function printHelp() {
-  console.log(`Usage: tsx cli_searchdb.ts [options]\n\n` +
-    `Options:\n` +
-    `  --file, -f <path>     File to read content from\n` +
-    `  --text, -t <string>   Inline content (if no --file)\n` +
-    `  --mode, -m <mode>     One of label|embed|both (default: both)\n` +
-    `  --openai              Use OpenAI for label + embeddings\n` +
-    `  --api-key <key>       OpenAI API key (or set OPENAI_API_KEY)\n` +
-    `  --label-model <name>  Label model (default: gpt5-nano)\n` +
-    `  --embed-model <name>  Embedding model (default: text-embedding-3-small)\n`)
+  console.log(
+    `Usage: tsx cli_searchdb.ts [options]\n\n` +
+      `Options:\n` +
+      `  --file, -f <path>     File to read content from\n` +
+      `  --text, -t <string>   Inline content (if no --file)\n` +
+      `  --mode, -m <mode>     One of label|embed|both (default: both)\n` +
+      `  --openai              Use OpenAI for label + embeddings\n` +
+      `  --api-key <key>       OpenAI API key (or set OPENAI_API_KEY)\n` +
+      `  --label-model <name>  Label model (default: gpt-5-nano)\n` +
+      `  --embed-model <name>  Embedding model (default: text-embedding-3-small)\n`,
+  )
 }
 
 function sha256Hex(input: string): string {
@@ -62,7 +64,7 @@ async function main() {
     process.exit(1)
   }
   const apiKey = args.apiKey || process.env.OPENAI_API_KEY || ''
-  const labelModel = args.labelModel || 'gpt5-nano'
+  const labelModel = args.labelModel || 'gpt-5-nano'
   const embedModel = args.embedModel || 'text-embedding-3-small'
 
   const content = args.file ? fs.readFileSync(args.file, 'utf8') : (args.text as string)
@@ -95,7 +97,13 @@ async function main() {
     const { description } = await annotator.labelAndEmbed(chunk)
     const vec = await annotator.embed(`${description}\n\n${chunk.content}`)
     console.log('Embedding dim:', vec.length)
-    console.log('Embedding preview:', vec.slice(0, 8).map((v: number) => v.toFixed(4)).join(', '))
+    console.log(
+      'Embedding preview:',
+      vec
+        .slice(0, 8)
+        .map((v: number) => v.toFixed(4))
+        .join(', '),
+    )
   }
 }
 
