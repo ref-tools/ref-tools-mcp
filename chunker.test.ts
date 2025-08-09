@@ -42,12 +42,7 @@ describe('chunker by language', () => {
       `class User:\n    def __init__(self, name):\n        self.name = name\n\n    def hello(self):\n        return 'hi ' + self.name\n\n\ndef util(x, y):\n    return x + y\n`,
     )
 
-    // Go
-    write(
-      tmp,
-      'go/example.go',
-      `package main\n\ntype Point struct { X int; Y int }\n\nfunc (p Point) Sum() int { return p.X + p.Y }\n\nfunc Top(a int, b int) int { return a + b }\n`,
-    )
+    // (Go removed)
 
     // Java
     write(
@@ -96,14 +91,7 @@ describe('chunker by language', () => {
     expect(fn.content).toContain('def util')
   })
 
-  it('chunks Go with methods and functions', async () => {
-    const file = path.join(tmp, 'go/example.go')
-    const chunks = (await chunkFile(file))!
-    const m = findChunk(chunks, (c) => c.type === 'method_declaration' && c.name === 'Sum')
-    const f = findChunk(chunks, (c) => c.type === 'function_declaration' && c.name === 'Top')
-    expect(m.content).toContain('func (p Point) Sum')
-    expect(f.content).toContain('func Top')
-  })
+  // (Go test removed)
 
   it('chunks Java with classes and methods', async () => {
     const file = path.join(tmp, 'java/Example.java')
@@ -134,7 +122,7 @@ describe('chunker by language', () => {
     const chunks = await chunkCodebase(tmp)
     // Should have at least one file chunk per file plus some function/class chunks
     const fileChunks = chunks.filter((c) => c.type === 'file')
-    expect(fileChunks.length).toBeGreaterThanOrEqual(7)
+    expect(fileChunks.length).toBeGreaterThanOrEqual(6)
     // Ensure relationships exist
     const hasContains = chunks.some((c) => c.relations.some((r) => r.type === 'contains'))
     expect(hasContains).toBe(true)

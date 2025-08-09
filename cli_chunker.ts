@@ -2,7 +2,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { chunkCodebase, type Chunk } from './src/chunker'
+import { chunkCodebase, type Chunk } from './chunker'
 
 export type CliFormat = 'json' | 'human'
 

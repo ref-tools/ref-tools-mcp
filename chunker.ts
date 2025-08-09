@@ -4,7 +4,6 @@ import crypto from 'node:crypto'
 import Parser, { SyntaxNode } from 'tree-sitter'
 import JavaScript from 'tree-sitter-javascript'
 import Python from 'tree-sitter-python'
-import Go from 'tree-sitter-go'
 import Java from 'tree-sitter-java'
 import Ruby from 'tree-sitter-ruby'
 import C from 'tree-sitter-c'
@@ -31,7 +30,7 @@ export type Chunk = {
 
 export type ChunkerOptions = {
   /**
-   * Languages to enable. If omitted, a default set (js,ts,py,go,java,ruby,c) is used.
+   * Languages to enable. If omitted, a default set (js,ts,py,java,ruby,c) is used.
    */
   languages?: string[]
   /**
@@ -78,26 +77,6 @@ const LANGUAGES: LanguageConfig[] = [
     language: Python,
     chunkNodeTypes: ['function_definition', 'class_definition'],
     getName: (node) => childIdentifier(node),
-  },
-  {
-    name: 'go',
-    exts: ['.go'],
-    language: Go,
-    chunkNodeTypes: ['function_declaration', 'method_declaration', 'type_declaration'],
-    getName: (node, src) => {
-      if (node.type === 'function_declaration' || node.type === 'method_declaration') {
-        const id = node.childForFieldName('name')
-        return id ? textOf(id, src) : undefined
-      }
-      if (node.type === 'type_declaration') {
-        const spec = node.descendantsOfType('type_spec')[0]
-        if (spec) {
-          const id = spec.childForFieldName('name')
-          return id ? textOf(id, src) : undefined
-        }
-      }
-      return undefined
-    },
   },
   {
     name: 'java',
@@ -258,7 +237,10 @@ export async function chunkFile(
   return chunks
 }
 
-export async function chunkCodebase(rootDir: string, options: ChunkerOptions = {}): Promise<Chunk[]> {
+export async function chunkCodebase(
+  rootDir: string,
+  options: ChunkerOptions = {},
+): Promise<Chunk[]> {
   const files = walkDir(rootDir, options.shouldIncludePath)
   const all: Chunk[] = []
   for (const abs of files) {
@@ -267,4 +249,3 @@ export async function chunkCodebase(rootDir: string, options: ChunkerOptions = {
   }
   return all
 }
-
