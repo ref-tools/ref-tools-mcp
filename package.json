@@ -11,6 +11,7 @@
     "inspect": "npx @modelcontextprotocol/inspector node dist/index.cjs",
     "start:http": "TRANSPORT=http node dist/index.cjs",
     "dev": "concurrently \"npm run watch\" \"npm run inspect\"",
+    "test": "vitest",
     "check": "tsc --noEmit",
     "pre-commit": "npm run check",
     "prepublishOnly": "npm run build"
@@ -22,6 +23,7 @@
     "dist"
   ],
   "dependencies": {
+    "@mcp-ui/server": "^5.2.0",
     "@modelcontextprotocol/inspector": "^0.16.1",
     "@modelcontextprotocol/sdk": "^1.0.3",
     "axios": "^1.8.4"
@@ -32,6 +34,7 @@
     "esbuild": "^0.24.0",
     "prettier": "^3.4.2",
     "tsx": "^4.19.4",
-    "typescript": "^5.3.3"
+    "typescript": "^5.3.3",
+    "vitest": "^3.2.4"
   }
 }
