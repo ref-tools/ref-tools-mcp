@@ -4,6 +4,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import crypto from 'node:crypto'
 import { SearchDB, defaultEmbedder, defaultLabeler } from './searchdb'
+import { makeOpenAILabeler, makeOpenAIEmbedder } from './openai_searchdb'
 import type { Chunk } from './chunker'
 
 type Args = {
@@ -52,47 +53,7 @@ function sha256Hex(input: string): string {
   return crypto.createHash('sha256').update(input).digest('hex')
 }
 
-async function openaiLabeler(apiKey: string, model: string) {
-  return async (chunk: Chunk): Promise<string> => {
-    const prompt = `Briefly (\u003c30 words) label this code, including key function names if present.\n` +
-      `File: ${path.basename(chunk.filePath)}\n` +
-      `Lines: ${chunk.line}-${chunk.endLine}\n` +
-      `Content:\n${chunk.content}`
-    const res = await fetch('https://api.openai.com/v1/responses', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model,
-        input: prompt,
-      }),
-    })
-    if (!res.ok) throw new Error(`OpenAI label error: ${res.status} ${await res.text()}`)
-    const data: any = await res.json()
-    const text: string = data.output_text || data.content?.[0]?.text || data.choices?.[0]?.message?.content || ''
-    return text.trim().split(/\s+/).slice(0, 30).join(' ')
-  }
-}
-
-async function openaiEmbedder(apiKey: string, model: string) {
-  return async (text: string): Promise<number[]> => {
-    const res = await fetch('https://api.openai.com/v1/embeddings', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({ model, input: text }),
-    })
-    if (!res.ok) throw new Error(`OpenAI embed error: ${res.status} ${await res.text()}`)
-    const data: any = await res.json()
-    const vec: number[] = data.data?.[0]?.embedding
-    if (!Array.isArray(vec)) throw new Error('Invalid embedding response')
-    return vec
-  }
-}
+// OpenAI-specific helpers have been moved to openai_searchdb.ts
 
 async function main() {
   const args = parseArgs(process.argv.slice(2))
@@ -119,8 +80,8 @@ async function main() {
     relations: [],
   }
 
-  const labeler = args.openai ? (await openaiLabeler(apiKey, labelModel)) : defaultLabeler
-  const embedder = args.openai ? (await openaiEmbedder(apiKey, embedModel)) : defaultEmbedder
+  const labeler = args.openai ? makeOpenAILabeler({ apiKey, model: labelModel }) : defaultLabeler
+  const embedder = args.openai ? makeOpenAIEmbedder({ apiKey, model: embedModel }) : defaultEmbedder
 
   const db = new SearchDB({ labeler, embedder })
   await db.addChunk(chunk)
@@ -145,4 +106,3 @@ if (process.argv[1] === __filename) {
     process.exit(1)
   })
 }
-
