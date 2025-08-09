@@ -608,12 +608,9 @@ type Tok =
   | { type: 'eof' }
 
 class Tokenizer {
-  private i = 0
-  private current?: Tok
   private tokens: Tok[]
   constructor(private input: string) {
     this.tokens = this.lex()
-    this.current = this.tokens[0]
   }
 
   private lex(): Tok[] {
@@ -625,14 +622,14 @@ class Tokenizer {
     const symbols = new Set(['(', ')', '[', ']', '{', '}', ',', ':', '.', '-', '>', '<', '=', '!', '*'])
     let i = 0
     while (i < s.length) {
-      const ch = s[i]
+      const ch = s.charAt(i)
       if (ch === ' ' || ch === '\t' || ch === '\n' || ch === '\r') {
         i++
         continue
       }
-      if (ch === '/' && s[i + 1] === '/') {
+      if (ch === '/' && s.charAt(i + 1) === '/') {
         // line comment
-        while (i < s.length && s[i] !== '\n') i++
+        while (i < s.length && s.charAt(i) !== '\n') i++
         continue
       }
       if (ch === '\'' || ch === '"') {
@@ -640,9 +637,9 @@ class Tokenizer {
         i++
         let str = ''
         while (i < s.length) {
-          const c = s[i]
+          const c = s.charAt(i)
           if (c === '\\') {
-            const next = s[i + 1]
+            const next = s.charAt(i + 1)
             const map: Record<string, string> = { n: '\n', r: '\r', t: '\t', '\\': '\\', '"': '"', '\'': '\'' }
             if (map[next] !== undefined) {
               str += map[next]
@@ -663,8 +660,8 @@ class Tokenizer {
       if (isAlpha(ch)) {
         let id = ch
         i++
-        while (i < s.length && isAlnum(s[i])) {
-          id += s[i]
+        while (i < s.length && isAlnum(s.charAt(i))) {
+          id += s.charAt(i)
           i++
         }
         const kw = id.toUpperCase()
@@ -693,14 +690,14 @@ class Tokenizer {
       if (/[0-9]/.test(ch)) {
         let num = ch
         i++
-        while (i < s.length && /[0-9_]/.test(s[i])) {
-          num += s[i]
+        while (i < s.length && /[0-9_]/.test(s.charAt(i))) {
+          num += s.charAt(i)
           i++
         }
-        if (s[i] === '.' && /[0-9]/.test(s[i + 1])) {
-          num += s[i++]
-          while (i < s.length && /[0-9_]/.test(s[i])) {
-            num += s[i]
+        if (s.charAt(i) === '.' && /[0-9]/.test(s.charAt(i + 1))) {
+          num += s.charAt(i++)
+          while (i < s.length && /[0-9_]/.test(s.charAt(i))) {
+            num += s.charAt(i)
             i++
           }
         }
@@ -709,7 +706,7 @@ class Tokenizer {
       }
       if (symbols.has(ch)) {
         // two-char operators
-        const two = ch + s[i + 1]
+        const two = ch + s.charAt(i + 1)
         if (two === '->' || two === '<-' || two === '<=' || two === '>=' || two === '!=' || two === '<>') {
           push({ type: 'symbol', value: two })
           i += 2
@@ -728,7 +725,7 @@ class Tokenizer {
 
   private idx = 0
   private tok(): Tok {
-    return this.tokens[this.idx]
+    return this.tokens[this.idx] ?? { type: 'eof' }
   }
   private advance() {
     this.idx++

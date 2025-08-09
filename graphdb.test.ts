@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { GraphDB, Node, Relationship } from './graphdb'
+import { GraphDB } from './graphdb'
+import type { Node, Relationship } from './graphdb'
 
 function isNode(x: any): x is Node {
   return !!x && typeof x.id === 'number' && !!(x as any).properties && !!(x as any).labels
@@ -32,7 +33,7 @@ describe('GraphDB - CREATE', () => {
     db.run("CREATE (a:Person {name:'A'})-[:KNOWS {since:2020}]->(b:Person {name:'B'})")
     expect(db.getAllNodes()).toHaveLength(2)
     expect(db.getAllRelationships()).toHaveLength(1)
-    const rel = db.getAllRelationships()[0]
+    const rel = db.getAllRelationships()[0]!
     expect(rel.type).toBe('KNOWS')
     expect(rel.properties.since).toBe(2020)
   })
