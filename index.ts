@@ -204,8 +204,7 @@ function createServerInstance(mcpClient: string = 'unknown', sessionId?: string)
     }
 
     if (request.params.name === 'ui_hello') {
-      const args = (request.params.arguments || {}) as { title?: string; message?: string }
-      return callUiHello(args)
+      return callUiHello()
     }
 
     if (request.params.name === 'generate_ui') {

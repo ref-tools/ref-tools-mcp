@@ -31,6 +31,10 @@
 [] merkle tree for updating as files update
 [] 
 
+# benchmarks for the performance of various in-mem systems
+- create a bench mark
+- find tools to compare and see performance (eg scale and speed)
+
 # ref indexing endpoint
 [] ref endpoint for indexing chunks to private index
 [] gpt5-nano labelling chunks 
