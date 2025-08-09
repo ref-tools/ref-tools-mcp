@@ -14,11 +14,10 @@
     "allowUnreachableCode": false,
     "skipLibCheck": true,
     "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
     "resolveJsonModule": true,
     "outDir": "./dist",
     "composite": true
   },
-  "include": [
-    "**/*.ts"
-  ],
+  "include": ["**/*.ts"]
 }

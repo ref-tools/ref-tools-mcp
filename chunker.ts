@@ -1,13 +1,13 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import crypto from 'node:crypto'
-import Parser, { SyntaxNode } from 'tree-sitter'
+import Parser, { type SyntaxNode } from 'tree-sitter'
 import JavaScript from 'tree-sitter-javascript'
 import Python from 'tree-sitter-python'
 import Java from 'tree-sitter-java'
 import Ruby from 'tree-sitter-ruby'
 import C from 'tree-sitter-c'
-import { typescript, tsx } from 'tree-sitter-typescript'
+import TS from 'tree-sitter-typescript'
 
 export type Relation = {
   type: 'contains' | 'defines' | 'references'
@@ -60,14 +60,14 @@ const LANGUAGES: LanguageConfig[] = [
   {
     name: 'typescript',
     exts: ['.ts'],
-    language: typescript,
+    language: TS.typescript,
     chunkNodeTypes: ['function_declaration', 'method_definition', 'class_declaration'],
     getName: nameFromCommonNode,
   },
   {
     name: 'tsx',
     exts: ['.tsx'],
-    language: tsx,
+    language: TS.tsx,
     chunkNodeTypes: ['function_declaration', 'method_definition', 'class_declaration'],
     getName: nameFromCommonNode,
   },

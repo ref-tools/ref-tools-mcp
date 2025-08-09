@@ -6,6 +6,35 @@ import { chunkCodebase, type Chunk } from './chunker'
 
 export type CliFormat = 'json' | 'human'
 
+function usage(): string {
+  return [
+    'code-chunker - chunk a codebase into function/class/file units',
+    '',
+    'Usage:',
+    '  code-chunker --root <dir> --out <file> [--format human|json] [options]',
+    '',
+    'Required:',
+    '  --out <file>         Output file path',
+    '',
+    'Inputs:',
+    '  --root <dir>         Root directory to scan (defaults to current working directory)',
+    '',
+    'Options:',
+    '  --format <fmt>       Output format: "human" (default) or "json"',
+    '  --array              With --format json, write a JSON array instead of JSONL',
+    '  --pretty             Pretty-print JSON output',
+    '  --languages <list>   Comma-separated list of languages to enable',
+    '                       Available: javascript, typescript, tsx, python, java, ruby, c',
+    '  -h, --help           Show this help and exit',
+    '',
+    'Examples:',
+    '  code-chunker --root . --out chunks.txt',
+    '  code-chunker --root ./repo --out chunks.jsonl --format json',
+    '  code-chunker --root ./repo --out chunks.json --format json --array --pretty',
+    '  code-chunker --root ./repo --out ts-only.txt --languages typescript,tsx',
+  ].join('\n')
+}
+
 export function toHumanReadable(chunks: Chunk[], opts?: { relativeTo?: string }): string {
   const rel = (p: string) => (opts?.relativeTo ? path.relative(opts.relativeTo, p) || '.' : p)
   const lines: string[] = []
@@ -71,18 +100,25 @@ function parseArgs(argv: string[]) {
   const positionals: string[] = []
   for (let i = 2; i < argv.length; i++) {
     const a = argv[i]
+    if (!a) continue
+    if (a === '-h' || a === '--help') {
+      args.help = true
+      continue
+    }
     if (a.startsWith('--')) {
-      const [k, v] = a.split('=')
-      if (typeof v === 'undefined') {
+      const eqIndex = a.indexOf('=')
+      const key = eqIndex >= 0 ? a.slice(2, eqIndex) : a.slice(2)
+      const val = eqIndex >= 0 ? a.slice(eqIndex + 1) : undefined
+      if (typeof val === 'undefined') {
         const next = argv[i + 1]
         if (next && !next.startsWith('-')) {
-          args[k.slice(2)] = next
+          args[key] = next
           i++
         } else {
-          args[k.slice(2)] = true
+          args[key] = true
         }
       } else {
-        args[k.slice(2)] = v
+        args[key] = val
       }
     } else {
       positionals.push(a)
@@ -93,20 +129,35 @@ function parseArgs(argv: string[]) {
 
 async function run() {
   const { args } = parseArgs(process.argv)
+  if (args.help) {
+    console.log(usage())
+    process.exit(0)
+  }
+
   const root = (args.root as string) || process.cwd()
   const out = args.out as string
-  const format = ((args.format as string) || 'human') as CliFormat
+  const formatInput = (args.format as string) || 'human'
+  const format = (formatInput === 'json' || formatInput === 'human' ? formatInput : undefined) as
+    | CliFormat
+    | undefined
   const jsonMode = format === 'json'
   const jsonArray = !!args.array
   const pretty = !!args.pretty
   const languages = (args.languages as string | undefined)?.split(',').map((s) => s.trim())
 
-  const chunks = await chunkCodebase(root, { languages })
-
   if (!out) {
-    console.error('Missing required --out <file>')
+    console.error('Error: Missing required --out <file>\n')
+    console.log(usage())
     process.exit(2)
   }
+
+  if (!format) {
+    console.error(`Error: Invalid --format ${JSON.stringify(formatInput)}\n`)
+    console.log(usage())
+    process.exit(2)
+  }
+
+  const chunks = await chunkCodebase(root, { languages })
 
   if (jsonMode) {
     writeJsonChunks(out, chunks, { format: jsonArray ? 'array' : 'jsonl', pretty })
@@ -116,7 +167,8 @@ async function run() {
   }
 }
 
-const isDirectRun = import.meta.url === pathToFileURL(process.argv[1]).href
+const argv1 = process.argv[1]
+const isDirectRun = argv1 ? import.meta.url === pathToFileURL(argv1).href : false
 if (isDirectRun) {
   run().catch((err) => {
     console.error(err)

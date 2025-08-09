@@ -53,6 +53,23 @@ export function callUiHello(args: { title?: string; message?: string }) {
         send({ type: 'notify', payload: { message: 'Button clicked inside MCP-UI iframe' } });
       });
     </script>
+    <script>
+    const resizeObserver = new ResizeObserver((entries) => {
+      entries.forEach((entry) => {
+        window.parent.postMessage(
+          {
+            type: "ui-size-change",
+            payload: {
+              height: entry.contentRect.height,
+            },
+          },
+          "*"
+        );
+      });
+    });
+
+    resizeObserver.observe(document.documentElement);
+    </script>
   </body>
 </html>`
 
