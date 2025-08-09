@@ -13,19 +13,25 @@ export const uiHelloTool: Tool = {
 export function callUiHello() {
   const html = `<!doctype html>
 <html>
-  <body style="background-color: #000000; height: 640px;">
-    <h1 style="color: #ffffff;">v7 - local file</h1>
-    <a href="cursor://Users/matt/code/ref-tools-mcp/helloui.ts">Local file</a>
+  <body style="margin:0; font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, sans-serif;">
+    <h1>UI Resize Test</h1>
+    <button id="grow">Grow height</button>
+    <div id="pad" style="height: 120px;"></div>
     <script>
-    window.parent.postMessage(
-        {
-          type: "ui-size-change",
-          payload: {
-            height: 640,
-          },
-        },
-        "*"
-      );
+      const ro = new ResizeObserver((entries) => {
+        for (const entry of entries) {
+          window.parent.postMessage(
+            { type: "ui-size-change", payload: { height: entry.contentRect.height } },
+            "*"
+          );
+        }
+      });
+      ro.observe(document.documentElement);
+
+      document.getElementById('grow').addEventListener('click', () => {
+        const pad = document.getElementById('pad');
+        pad.style.height = (pad.offsetHeight + 240) + 'px';
+      });
     </script>
   </body>
 </html>`

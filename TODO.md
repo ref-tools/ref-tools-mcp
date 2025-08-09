@@ -5,6 +5,7 @@
 [x] try having gpt5 generate some ui
 [x] gpt5 generate a d3js solar system
 [x] try gpt5 generating
+[] build and run goose from source
 [] get a higher ui
 
 # knowledge graph
