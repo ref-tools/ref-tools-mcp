@@ -5,10 +5,10 @@
 [] try having gpt5 generate some ui
 
 # knowledge graph
-[] gpt5 build a in-memory graph db that supports cypher
+[x] gpt5 build a in-memory graph db that supports cypher https://github.com/ref-tools/ref-tools-mcp/pull/12
 [] ast parsing to chunks
 
 # chunk indexing
 [] ref endpoint for indexing chunks to private index
 [] gpt5-nano labelling chunks 
-
+[] merkle tree for updating only as needed
