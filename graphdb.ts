@@ -116,7 +116,12 @@ export class GraphDB {
       // Ensure endpoints exist (create if inline literal pattern specifies labels/props)
       const left = this.materializeNodeEndpoint(pattern.left, scope)
       const right = this.materializeNodeEndpoint(pattern.right, scope)
-      const rel = this.createRelationship(left.id, right.id, pattern.relType || '', pattern.relProps)
+      const rel = this.createRelationship(
+        left.id,
+        right.id,
+        pattern.relType || '',
+        pattern.relProps,
+      )
       if (pattern.relVar) scope[pattern.relVar] = rel
       // Bind endpoints if variables present
       if (pattern.left.variable) scope[pattern.left.variable] = left
@@ -125,7 +130,10 @@ export class GraphDB {
     }
   }
 
-  private materializeNodeEndpoint(nodePat: NodePattern, scope: Record<string, Node | Relationship>): Node {
+  private materializeNodeEndpoint(
+    nodePat: NodePattern,
+    scope: Record<string, Node | Relationship>,
+  ): Node {
     if (nodePat.variable && scope[nodePat.variable] && isNode(scope[nodePat.variable])) {
       return scope[nodePat.variable] as Node
     }
@@ -139,7 +147,12 @@ export class GraphDB {
     return node
   }
 
-  private createRelationship(from: number, to: number, type: string, props: Properties): Relationship {
+  private createRelationship(
+    from: number,
+    to: number,
+    type: string,
+    props: Properties,
+  ): Relationship {
     const rel: Relationship = { id: this.nextRelId++, type, from, to, properties: { ...props } }
     this.rels.push(rel)
     return rel
@@ -151,7 +164,8 @@ export class GraphDB {
       for (const binding of inputBindings) {
         for (const node of this.nodes) {
           if (!matchNodeLiteral(node, pattern)) continue
-          if (pattern.variable && binding[pattern.variable] && binding[pattern.variable] !== node) continue
+          if (pattern.variable && binding[pattern.variable] && binding[pattern.variable] !== node)
+            continue
           const newBinding = { ...binding }
           if (pattern.variable) newBinding[pattern.variable] = node
           results.push(newBinding)
@@ -169,9 +183,17 @@ export class GraphDB {
           if (!matchNodeLiteral(fromNode, pattern.left)) continue
           if (!matchNodeLiteral(toNode, pattern.right)) continue
           // Respect existing bindings
-          if (pattern.left.variable && binding[pattern.left.variable] && binding[pattern.left.variable] !== fromNode)
+          if (
+            pattern.left.variable &&
+            binding[pattern.left.variable] &&
+            binding[pattern.left.variable] !== fromNode
+          )
             continue
-          if (pattern.right.variable && binding[pattern.right.variable] && binding[pattern.right.variable] !== toNode)
+          if (
+            pattern.right.variable &&
+            binding[pattern.right.variable] &&
+            binding[pattern.right.variable] !== toNode
+          )
             continue
           if (pattern.relVar && binding[pattern.relVar] && binding[pattern.relVar] !== rel) continue
           const newBinding = { ...binding }
@@ -272,8 +294,20 @@ function truthy(v: any): boolean {
 
 // AST definitions
 type Statement =
-  | { kind: 'Create'; patterns: Pattern[]; where?: Expr; returnClause?: ReturnClause; limit?: number }
-  | { kind: 'Match'; patterns: Pattern[]; where?: Expr; returnClause?: ReturnClause; limit?: number }
+  | {
+      kind: 'Create'
+      patterns: Pattern[]
+      where?: Expr
+      returnClause?: ReturnClause
+      limit?: number
+    }
+  | {
+      kind: 'Match'
+      patterns: Pattern[]
+      where?: Expr
+      returnClause?: ReturnClause
+      limit?: number
+    }
 
 type Pattern = NodePattern | RelPattern
 
@@ -296,7 +330,11 @@ type RelPattern = {
 type ReturnItem =
   | { kind: 'Var'; name: string; alias?: string; agg?: undefined }
   | { kind: 'Prop'; variable: string; property: string; alias?: string; agg?: undefined }
-  | { kind: 'Agg'; agg: { func: 'count'; arg: '*' | string } & { of?: { variable?: string } }; alias?: string }
+  | {
+      kind: 'Agg'
+      agg: { func: 'count'; arg: '*' | string } & { of?: { variable?: string } }
+      alias?: string
+    }
   | { kind: 'Agg'; agg: { func: 'collect' } & { of: { variable: string } }; alias?: string }
 
 type ReturnClause = { items: ReturnItem[] }
@@ -304,7 +342,12 @@ type ReturnClause = { items: ReturnItem[] }
 type Expr =
   | { kind: 'Binary'; op: 'AND' | 'OR'; left: Expr; right: Expr }
   | { kind: 'Not'; expr: Expr }
-  | { kind: 'Compare'; op: '=' | '!=' | '<>' | '<' | '<=' | '>' | '>='; left: ValueExpr; right: ValueExpr }
+  | {
+      kind: 'Compare'
+      op: '=' | '!=' | '<>' | '<' | '<=' | '>' | '>='
+      left: ValueExpr
+      right: ValueExpr
+    }
   | ValueExpr
 
 type ValueExpr =
@@ -475,7 +518,11 @@ class Parser {
         const varName = this.t.readIdent()
         this.t.expectSymbol(')')
         const alias = this.parseOptionalAlias()
-        return { kind: 'Agg', agg: { func: 'count', arg: varName, of: { variable: varName } }, alias }
+        return {
+          kind: 'Agg',
+          agg: { func: 'count', arg: varName, of: { variable: varName } },
+          alias,
+        }
       }
     }
     if (this.t.peekIsKw('COLLECT')) {
@@ -501,7 +548,8 @@ class Parser {
   private parseOptionalAlias(): string | undefined {
     if (this.t.peekIsKw('AS')) {
       this.t.expectKw('AS')
-      return this.t.readIdent()
+      // Allow keywords to be used as alias names (e.g., AS count)
+      return this.t.readIdentOrKeywordAsName()
     }
     return undefined
   }
@@ -619,7 +667,23 @@ class Tokenizer {
     const push = (tok: Tok) => t.push(tok)
     const isAlpha = (c: string) => /[A-Za-z_]/.test(c)
     const isAlnum = (c: string) => /[A-Za-z0-9_]/.test(c)
-    const symbols = new Set(['(', ')', '[', ']', '{', '}', ',', ':', '.', '-', '>', '<', '=', '!', '*'])
+    const symbols = new Set([
+      '(',
+      ')',
+      '[',
+      ']',
+      '{',
+      '}',
+      ',',
+      ':',
+      '.',
+      '-',
+      '>',
+      '<',
+      '=',
+      '!',
+      '*',
+    ])
     let i = 0
     while (i < s.length) {
       const ch = s.charAt(i)
@@ -632,7 +696,7 @@ class Tokenizer {
         while (i < s.length && s.charAt(i) !== '\n') i++
         continue
       }
-      if (ch === '\'' || ch === '"') {
+      if (ch === "'" || ch === '"') {
         const quote = ch
         i++
         let str = ''
@@ -640,7 +704,14 @@ class Tokenizer {
           const c = s.charAt(i)
           if (c === '\\') {
             const next = s.charAt(i + 1)
-            const map: Record<string, string> = { n: '\n', r: '\r', t: '\t', '\\': '\\', '"': '"', '\'': '\'' }
+            const map: Record<string, string> = {
+              n: '\n',
+              r: '\r',
+              t: '\t',
+              '\\': '\\',
+              '"': '"',
+              "'": "'",
+            }
             if (map[next] !== undefined) {
               str += map[next]
               i += 2
@@ -707,7 +778,14 @@ class Tokenizer {
       if (symbols.has(ch)) {
         // two-char operators
         const two = ch + s.charAt(i + 1)
-        if (two === '->' || two === '<-' || two === '<=' || two === '>=' || two === '!=' || two === '<>') {
+        if (
+          two === '->' ||
+          two === '<-' ||
+          two === '<=' ||
+          two === '>=' ||
+          two === '!=' ||
+          two === '<>'
+        ) {
           push({ type: 'symbol', value: two })
           i += 2
           continue
@@ -778,10 +856,24 @@ class Tokenizer {
     if (t.type !== 'number') throw this.error('Expected number')
     return t.value
   }
+  // Accept either an identifier or a keyword token as a name (for aliases)
+  readIdentOrKeywordAsName(): string {
+    const t = this.next()
+    if (t.type === 'ident') return t.value
+    if (t.type === 'kw') return t.value.toLowerCase()
+    throw this.error('Expected identifier')
+  }
   peekCompareOp(): boolean {
     const t = this.tok()
     return (
-      (t.type === 'symbol' && (t.value === '=' || t.value === '<>' || t.value === '<' || t.value === '<=' || t.value === '>' || t.value === '>=' || t.value === '!='))
+      t.type === 'symbol' &&
+      (t.value === '=' ||
+        t.value === '<>' ||
+        t.value === '<' ||
+        t.value === '<=' ||
+        t.value === '>' ||
+        t.value === '>=' ||
+        t.value === '!=')
     )
   }
   readCompareOp(): string {

@@ -168,13 +168,11 @@ export async function chunkFile(
 ): Promise<Chunk[] | undefined> {
   const langCfg = getLanguageForFile(filePath, options.languages)
   if (!langCfg) return undefined
-  const source = fs.readFileSync(filePath, 'utf8')
-  const parser = new Parser()
-  parser.setLanguage(langCfg.language)
-  const tree = parser.parse(source)
+  const sourceRaw = fs.readFileSync(filePath, 'utf8')
+  // Some parsers can throw on invalid inputs. Normalize minimally and fall back gracefully.
+  const source = sourceRaw.replace(/\u0000/g, '')
 
   const chunks: Chunk[] = []
-  const parentStack: { node: SyntaxNode; chunkId: string }[] = []
 
   const fileId = sha256Hex(`${path.resolve(filePath)}:file`)
   const fileChunk: Chunk = {
@@ -190,6 +188,19 @@ export async function chunkFile(
     relations: [],
   }
   chunks.push(fileChunk)
+
+  let tree: { rootNode: SyntaxNode } | undefined
+  try {
+    const parser = new Parser()
+    parser.setLanguage(langCfg.language)
+    // tree-sitter may throw "Invalid argument" for certain inputs; catch and return file-only chunk
+    tree = parser.parse(source) as unknown as { rootNode: SyntaxNode }
+  } catch {
+    // Return only the file chunk if parsing fails
+    return chunks
+  }
+
+  const parentStack: { node: SyntaxNode; chunkId: string }[] = []
   parentStack.push({ node: tree.rootNode, chunkId: fileId })
 
   const visit = (node: SyntaxNode) => {

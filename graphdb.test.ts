@@ -57,7 +57,7 @@ describe('GraphDB - MATCH nodes', () => {
   it('matches by inline properties', () => {
     const db = new GraphDB()
     db.run("CREATE (a:Person {name:'A', age:40}), (b:Person {name:'B', age:20})")
-    const res = db.run("MATCH (p:Person {age:20}) RETURN p")
+    const res = db.run('MATCH (p:Person {age:20}) RETURN p')
     expect(res).toHaveLength(1)
     expect((res[0].p as Node).properties.name).toBe('B')
   })
@@ -80,8 +80,12 @@ describe('GraphDB - MATCH relationships', () => {
 
   it('filters on relationship properties', () => {
     const db = new GraphDB()
-    db.run("CREATE (a:Person {name:'A'})-[:KNOWS {since:2020}]->(b:Person {name:'B'}), (a)-[:KNOWS {since:2010}]->(c:Person {name:'C'})")
-    const res = db.run('MATCH (a:Person)-[r:KNOWS]->(b:Person) WHERE r.since >= 2015 RETURN count(*) AS cnt')
+    db.run(
+      "CREATE (a:Person {name:'A'})-[:KNOWS {since:2020}]->(b:Person {name:'B'}), (a)-[:KNOWS {since:2010}]->(c:Person {name:'C'})",
+    )
+    const res = db.run(
+      'MATCH (a:Person)-[r:KNOWS]->(b:Person) WHERE r.since >= 2015 RETURN count(*) AS cnt',
+    )
     expect(res).toEqual([{ cnt: 1 }])
   })
 })
@@ -98,8 +102,12 @@ describe('GraphDB - WHERE', () => {
 
   it('supports numeric comparisons and boolean logic', () => {
     const db = new GraphDB()
-    db.run("CREATE (a:Person {name:'A', age:20}), (b:Person {name:'B', age:30}), (c:Person {name:'C', age:40})")
-    const res = db.run('MATCH (p:Person) WHERE (p.age >= 30 AND p.age < 40) OR p.name = "A" RETURN collect(p) AS arr')
+    db.run(
+      "CREATE (a:Person {name:'A', age:20}), (b:Person {name:'B', age:30}), (c:Person {name:'C', age:40})",
+    )
+    const res = db.run(
+      'MATCH (p:Person) WHERE (p.age >= 30 AND p.age < 40) OR p.name = "A" RETURN collect(p) AS arr',
+    )
     // Should include A (age 20 by name) and B (30), exclude C (40)
     expect(Array.isArray(res[0].arr)).toBe(true)
     const names = (res[0].arr as Node[]).map((n) => n.properties.name).sort()
@@ -117,11 +125,29 @@ describe('GraphDB - RETURN projections', () => {
 
   it('supports count(var) and count(*)', () => {
     const db = new GraphDB()
-    db.run("CREATE (a:Person), (b:Person), (c:Animal)")
+    db.run('CREATE (a:Person), (b:Person), (c:Animal)')
     const c1 = db.run('MATCH (n) RETURN count(*) AS total')
     expect(c1).toEqual([{ total: 3 }])
     const c2 = db.run('MATCH (p:Person) RETURN count(p) AS persons')
     expect(c2).toEqual([{ persons: 2 }])
+  })
+
+  it('allows keyword-like alias names (count, collect, return)', () => {
+    const db = new GraphDB()
+    db.run("CREATE (a:Person {name:'Alice'}), (b:Person {name:'Bob'})")
+
+    // Alias name 'count' (same as function name)
+    const r1 = db.run('MATCH (n) RETURN count(*) AS count')
+    expect(r1).toEqual([{ count: 2 }])
+
+    // Alias name 'collect' (same as function name)
+    const r2 = db.run('MATCH (p:Person) RETURN collect(p) AS collect')
+    expect(Array.isArray(r2[0].collect)).toBe(true)
+    expect(r2[0].collect).toHaveLength(2)
+
+    // Alias name colliding with reserved keyword 'RETURN' (lowercase)
+    const r3 = db.run('MATCH (p:Person {name:"Alice"}) RETURN p.name AS return')
+    expect(r3).toEqual([{ return: 'Alice' }])
   })
 })
 
