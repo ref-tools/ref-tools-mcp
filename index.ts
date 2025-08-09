@@ -19,7 +19,7 @@ import {
 import axios from 'axios'
 import { createServer } from 'http'
 import { randomUUID } from 'crypto'
-import { uiHelloTool, callUiHello } from './visualize.js'
+import { uiHelloTool, callUiHello } from './helloui.js'
 import { generateUiTool, callGenerateUi } from './genui.js'
 
 // Tool configuration based on client type
