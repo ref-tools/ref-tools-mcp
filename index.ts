@@ -20,6 +20,7 @@ import axios from 'axios'
 import { createServer } from 'http'
 import { randomUUID } from 'crypto'
 import { uiHelloTool, callUiHello } from './visualize.js'
+import { generateUiTool, callGenerateUi } from './genui.js'
 
 // Tool configuration based on client type
 type ToolConfig = {
@@ -111,7 +112,7 @@ function createServerInstance(mcpClient: string = 'unknown', sessionId?: string)
 
   // Register request handlers
   server.setRequestHandler(ListToolsRequestSchema, async () => ({
-    tools: [searchTool, readTool, uiHelloTool],
+    tools: [searchTool, readTool, uiHelloTool, generateUiTool],
   }))
 
   server.setRequestHandler(ListPromptsRequestSchema, async () => ({
@@ -205,6 +206,18 @@ function createServerInstance(mcpClient: string = 'unknown', sessionId?: string)
     if (request.params.name === 'ui_hello') {
       const args = (request.params.arguments || {}) as { title?: string; message?: string }
       return callUiHello(args)
+    }
+
+    if (request.params.name === 'generate_ui') {
+      const args = (request.params.arguments || {}) as {
+        message: string
+        title?: string
+        theme?: string
+      }
+      if (!args.message) {
+        throw new McpError(ErrorCode.InvalidParams, 'Missing required argument: message')
+      }
+      return callGenerateUi(args)
     }
 
     throw new McpError(ErrorCode.MethodNotFound, `Could not find tool: ${request.params.name}`)
