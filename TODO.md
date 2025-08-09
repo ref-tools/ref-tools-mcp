@@ -27,12 +27,13 @@
 [x] build this https://github.com/ref-tools/ref-tools-mcp/pull/14
 
 # connected cli
-[] SearchAgent(directory)
+[x] SearchAgent(directory)
   - ingests a directory to chunks, embeds, creates graph deb
   - has search(query) fn that runs an agent that has search_graph(cypher) and search_query(prompt) tools
-[] cli that wraps Searcher and allows running queries at terminal. it should show some nice loading animation and then 
-[] searcher has a watcher
-[] merkle tree for updating as files update
+[x] cli that wraps Searcher and allows running queries at terminal. it should show some nice loading animation and then 
+[x] searcher has a watcher
+[x] merkle tree for updating as files update
+https://github.com/ref-tools/ref-tools-mcp/pull/15
 
 # persistence for different dbs
 [] should allow restarting search agent and compare merkel tree to data
