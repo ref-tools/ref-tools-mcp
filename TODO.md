@@ -5,7 +5,7 @@
 [x] try having gpt5 generate some ui
 [x] gpt5 generate a d3js solar system
 [x] try gpt5 generating
-[] build and run goose from source
+[] build and run goose from source https://github.com/block/goose/blob/main/CONTRIBUTING.md
 [] get a higher ui
 
 # knowledge graph
@@ -28,24 +28,27 @@
 
 # connected cli
 [] SearchAgent(directory)
-  - ingests a directory, embeds etc
+  - ingests a directory to chunks, embeds, creates graph deb
   - has search(query) fn that runs an agent that has search_graph(cypher) and search_query(prompt) tools
-[] cli that wraps Searcher
-
-# searcher watches
+[] cli that wraps Searcher and allows running queries at terminal. it should show some nice loading animation and then 
 [] searcher has a watcher
 [] merkle tree for updating as files update
 
+# persistence for different dbs
+[] should allow restarting search agent and compare merkel tree to data
+
 # connected mcp server
-[] search_code() to find info about the repo
+[] require a directory and openai env variables in config, otherwise don't setup these capabilites
+[] launch a SearchAgent in the directory
+[] tool search_code() to find info about the repo that calls search agent
+
+# visual results
 [] Update SearchAgent to optionally be able to return a visual with mcp-ui
 
+# see how much it can improve itself
+[] generate a bench mark test for each searchdb, graphdb (save results to a file, have a ui for viewing)
+[] optimize the shit out of in-memory systems
+- do this 3 times
+[] rewrite in rust with bindings (do on repeat)
 
-# benchmarks for the performance of various in-mem systems
-- create a bench mark
-- find tools to compare and see performance (eg scale and speed)
-
-# ref indexing endpoint
-[] ref endpoint for indexing chunks to private index
-[] gpt5-nano labelling chunks 
 
