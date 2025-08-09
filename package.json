@@ -11,7 +11,7 @@
     "inspect": "npx @modelcontextprotocol/inspector node dist/index.cjs",
     "start:http": "TRANSPORT=http node dist/index.cjs",
     "dev": "concurrently \"npm run watch\" \"npm run inspect\"",
-    "test": "vitest",
+    "test": "vitest run",
     "check": "tsc --noEmit",
     "pre-commit": "npm run check",
     "prepublishOnly": "npm run build"
