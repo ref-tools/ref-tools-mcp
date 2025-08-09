@@ -13,7 +13,6 @@ function usage() {
     'Options:',
     '  --root <dir>        Root directory (default: cwd)',
     '  --languages <list>  Comma-separated languages to enable',
-    '  --cypher            Treat --query as Cypher (graph query)',
     '  --agent             Use LLM agent (AI SDK) with streaming output',
     '  --mode <m>          Agent mode: findContext | answer (default: answer)',
     '  --model <name>      Agent model (default: gpt-5)',
@@ -77,7 +76,6 @@ async function run() {
     process.exit(2)
   }
   const languages = (args.languages as string | undefined)?.split(',').map((s) => s.trim())
-  const treatAsCypher = !!args.cypher
   const useAgent = !!args.agent
   const agentMode = ((args.mode as string | undefined) === 'findContext' ? 'findContext' : 'answer') as 'findContext' | 'answer'
   const model = (args.model as string | undefined) || 'gpt-5'
@@ -113,9 +111,7 @@ async function run() {
   }
 
   const s2 = spinner('Running query...')
-  const result: QueryResult = treatAsCypher
-    ? { kind: 'graph', rows: agent.search_graph(query) as any[] }
-    : await agent.search(query)
+  const result: QueryResult = await agent.search(query)
   s2.stop('Done.')
 
   if (result.kind === 'graph') {

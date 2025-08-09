@@ -65,11 +65,6 @@ export class SearchAgent {
         // fall through to heuristic routing
       }
     }
-    const looksLikeCypher = /^(MATCH|CREATE)\b/i.test(q) || /^cypher:/i.test(q)
-    if (looksLikeCypher) {
-      const cy = q.replace(/^cypher:/i, '').trim()
-      return { kind: 'graph', rows: this.graph.run(cy) }
-    }
     const chunks = await this.db.search(q)
     return { kind: 'search', chunks }
   }
@@ -344,38 +339,27 @@ export async function runAgentWithStreaming(
 ): Promise<AgentRunResult> {
   const apiKey = self['opts'].openaiApiKey || process.env.OPENAI_API_KEY
   const modelName = self['opts'].agentModel || 'gpt-5'
-  const looksLikeCypher = /^(MATCH|CREATE)\b/i.test(query) || /^cypher:/i.test(query)
 
   if (!apiKey) {
     // Fallback: heuristic single-step plan
-    if (looksLikeCypher) {
-      const cy = query.replace(/^cypher:/i, '').trim()
-      onStream?.({ type: 'tool_call', name: 'search_graph', input: { cypher: cy } })
-      const rows = (self as any)['graph'].run(cy)
-      onStream?.({ type: 'tool_result', name: 'search_graph', output: rows })
-      const md = await buildAgentMarkdownFromRows(cy, rows)
+    onStream?.({ type: 'tool_call', name: 'search_query', input: { query } })
+    const chunks = await (self as any)['db'].search(query)
+    onStream?.({ type: 'tool_result', name: 'search_query', output: chunks })
+    if (mode === 'findContext') {
+      onStream?.({ type: 'tool_call', name: 'finalize_context', input: { finalize: true } })
+      // In fallback, finalize to top 5 chunks
+      const selected = chunks.slice(0, 5)
+      onStream?.({ type: 'tool_result', name: 'finalize_context', output: selected })
+      const md = await buildAgentMarkdownFromChunks(query, selected, (self as any)['rootDir'])
       onStream?.({ type: 'final', markdown: md })
-      return { markdown: md, transcript: md }
-    } else {
-      onStream?.({ type: 'tool_call', name: 'search_query', input: { query } })
-      const chunks = await (self as any)['db'].search(query)
-      onStream?.({ type: 'tool_result', name: 'search_query', output: chunks })
-      if (mode === 'findContext') {
-        onStream?.({ type: 'tool_call', name: 'finalize_context', input: { finalize: true } })
-        // In fallback, finalize to top 5 chunks
-        const selected = chunks.slice(0, 5)
-        onStream?.({ type: 'tool_result', name: 'finalize_context', output: selected })
-        const md = await buildAgentMarkdownFromChunks(query, selected, (self as any)['rootDir'])
-        onStream?.({ type: 'final', markdown: md })
-        return { markdown: md, chunks: selected }
-      }
-      // answer mode: stream a brief transcript-like text then final markdown
-      onStream?.({ type: 'text_delta', text: 'Planning search...\n' })
-      onStream?.({ type: 'text_delta', text: 'Searching codebase...\n' })
-      const md = await buildAgentMarkdownFromChunks(query, chunks, (self as any)['rootDir'])
-      onStream?.({ type: 'final', markdown: md })
-      return { markdown: md, transcript: 'Planning search...\nSearching codebase...\n' + md }
+      return { markdown: md, chunks: selected }
     }
+    // answer mode: stream a brief transcript-like text then final markdown
+    onStream?.({ type: 'text_delta', text: 'Planning search...\n' })
+    onStream?.({ type: 'text_delta', text: 'Searching codebase...\n' })
+    const md = await buildAgentMarkdownFromChunks(query, chunks, (self as any)['rootDir'])
+    onStream?.({ type: 'final', markdown: md })
+    return { markdown: md, transcript: 'Planning search...\nSearching codebase...\n' + md }
   }
 
   const openai = createOpenAI({ apiKey })
@@ -441,7 +425,7 @@ export async function runAgentWithStreaming(
     }
   }
   onStream?.({ type: 'text_complete', text: finalText })
-  const markdown = finalText || (looksLikeCypher ? await buildAgentMarkdownFromRows(query, []) : await buildAgentMarkdownFromChunks(query, [], (self as any)['rootDir']))
+  const markdown = finalText || (await buildAgentMarkdownFromChunks(query, [], (self as any)['rootDir']))
   onStream?.({ type: 'final', markdown })
   // Note: without introspecting the tool results thread, we cannot programmatically pluck finalized chunks here.
   // Callers should process tool_result events for finalize_context to capture selected chunks.
