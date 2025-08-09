@@ -15,6 +15,7 @@ function usage() {
     '  --languages <list>  Comma-separated languages to enable',
     '  --cypher            Treat --query as Cypher (graph query)',
     '  --agent             Use LLM agent (AI SDK) with streaming output',
+    '  --mode <m>          Agent mode: findContext | answer (default: answer)',
     '  --model <name>      Agent model (default: gpt-5)',
     '  --api-key <key>     OpenAI API key (or set OPENAI_API_KEY)',
     '  --watch             Keep a background watcher running',
@@ -78,6 +79,7 @@ async function run() {
   const languages = (args.languages as string | undefined)?.split(',').map((s) => s.trim())
   const treatAsCypher = !!args.cypher
   const useAgent = !!args.agent
+  const agentMode = ((args.mode as string | undefined) === 'findContext' ? 'findContext' : 'answer') as 'findContext' | 'answer'
   const model = (args.model as string | undefined) || 'gpt-5'
   const apiKey = (args['api-key'] as string | undefined) || process.env.OPENAI_API_KEY
 
@@ -106,7 +108,7 @@ async function run() {
         console.log(e.markdown)
       }
     }
-    await runAgentWithStreaming(agent, query, render)
+    await runAgentWithStreaming(agent, query, render, agentMode)
     return
   }
 

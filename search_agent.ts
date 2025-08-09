@@ -23,6 +23,8 @@ export type QueryResult =
   | { kind: 'graph'; rows: any[] }
   | { kind: 'search'; chunks: Chunk[] }
 
+export type AgentMode = 'findContext' | 'answer'
+
 /**
  * SearchAgent ingests a codebase directory into chunks, builds embeddings + a graph,
  * serves hybrid semantic+keyword search, and supports graph queries (Cypher subset).
@@ -289,12 +291,14 @@ export type AgentStreamEvent =
   | { type: 'status'; message: string }
   | { type: 'text_delta'; text: string }
   | { type: 'text_complete'; text: string }
-  | { type: 'tool_call'; name: 'search_graph' | 'search_query'; input: any }
-  | { type: 'tool_result'; name: 'search_graph' | 'search_query'; output: any }
+  | { type: 'tool_call'; name: 'search_graph' | 'search_query' | 'finalize_context'; input: any }
+  | { type: 'tool_result'; name: 'search_graph' | 'search_query' | 'finalize_context'; output: any }
   | { type: 'final'; markdown: string }
 
 export interface AgentRunResult {
   markdown: string
+  chunks?: Chunk[]
+  transcript?: string
 }
 
 export async function buildAgentMarkdownFromChunks(query: string, chunks: Chunk[], rootDir: string): Promise<string> {
@@ -336,6 +340,7 @@ export async function runAgentWithStreaming(
   self: SearchAgent,
   query: string,
   onStream?: (e: AgentStreamEvent) => void,
+  mode: AgentMode = 'answer',
 ): Promise<AgentRunResult> {
   const apiKey = self['opts'].openaiApiKey || process.env.OPENAI_API_KEY
   const modelName = self['opts'].agentModel || 'gpt-5'
@@ -350,14 +355,26 @@ export async function runAgentWithStreaming(
       onStream?.({ type: 'tool_result', name: 'search_graph', output: rows })
       const md = await buildAgentMarkdownFromRows(cy, rows)
       onStream?.({ type: 'final', markdown: md })
-      return { markdown: md }
+      return { markdown: md, transcript: md }
     } else {
       onStream?.({ type: 'tool_call', name: 'search_query', input: { query } })
       const chunks = await (self as any)['db'].search(query)
       onStream?.({ type: 'tool_result', name: 'search_query', output: chunks })
+      if (mode === 'findContext') {
+        onStream?.({ type: 'tool_call', name: 'finalize_context', input: { finalize: true } })
+        // In fallback, finalize to top 5 chunks
+        const selected = chunks.slice(0, 5)
+        onStream?.({ type: 'tool_result', name: 'finalize_context', output: selected })
+        const md = await buildAgentMarkdownFromChunks(query, selected, (self as any)['rootDir'])
+        onStream?.({ type: 'final', markdown: md })
+        return { markdown: md, chunks: selected }
+      }
+      // answer mode: stream a brief transcript-like text then final markdown
+      onStream?.({ type: 'text_delta', text: 'Planning search...\n' })
+      onStream?.({ type: 'text_delta', text: 'Searching codebase...\n' })
       const md = await buildAgentMarkdownFromChunks(query, chunks, (self as any)['rootDir'])
       onStream?.({ type: 'final', markdown: md })
-      return { markdown: md }
+      return { markdown: md, transcript: 'Planning search...\nSearching codebase...\n' + md }
     }
   }
 
@@ -383,35 +400,52 @@ export async function runAgentWithStreaming(
     },
   })
 
+  // finalize_context tool is only meaningful in findContext mode; it lets the model choose chunk ids
+  const finalizeContext = aiTool({
+    description: 'Finalize the minimal set of relevant chunk ids to return as context.',
+    parameters: z.object({ chunkIds: z.array(z.string()).min(1) }),
+    execute: async ({ chunkIds }) => {
+      const all: Chunk[] = (self as any)['db'].listChunks()
+      const selected = all.filter((c) => chunkIds.includes(c.id))
+      onStream?.({ type: 'tool_call', name: 'search_query', input: { finalize: true, chunkIds } })
+      onStream?.({ type: 'tool_result', name: 'search_query', output: selected })
+      return selected
+    },
+  })
+
   const result = await streamText({
     model: openai(modelName),
     system:
-      'You are a helpful repository search agent. Choose and call tools to gather facts, then provide a concise markdown summary with links and line ranges. Prefer searching first, then refine or inspect the graph when helpful.',
+      (mode === 'findContext'
+        ? 'You are a repository search agent. Use search tools to find relevant code. When ready, call finalize_context with a minimal set of chunkIds. Do not include unnecessary chunks.'
+        : 'You are a helpful repository research agent. Call tools as needed and narrate your reasoning. Provide a concise markdown summary at the end.'),
     messages: [{ role: 'user', content: query }],
-    tools: { search_graph: searchGraph, search_query: searchQuery },
+    tools: mode === 'findContext' ? { search_graph: searchGraph, search_query: searchQuery, finalize_context: finalizeContext } : { search_graph: searchGraph, search_query: searchQuery },
   })
 
   let finalText = ''
   for await (const ev of result.fullStream) {
-    if (ev.type === 'text-delta') {
+    if ((ev as any).type === 'text-delta') {
       // @ts-ignore - ai-sdk v4 event shape
       const t = (ev as any).textDelta || (ev as any).text || ''
       finalText += t
       onStream?.({ type: 'text_delta', text: t })
     }
-    if (ev.type === 'tool-call') {
-      const name = (ev.toolName || 'search_query') as 'search_graph' | 'search_query'
+    if ((ev as any).type === 'tool-call') {
+      const name = ((ev as any).toolName || 'search_query') as 'search_graph' | 'search_query'
       onStream?.({ type: 'tool_call', name, input: (ev as any).args })
     }
-    if (ev.type === 'tool-result') {
-      const name = (ev.toolName || 'search_query') as 'search_graph' | 'search_query'
+    if ((ev as any).type === 'tool-result') {
+      const name = ((ev as any).toolName || 'search_query') as 'search_graph' | 'search_query'
       onStream?.({ type: 'tool_result', name, output: (ev as any).result })
     }
   }
   onStream?.({ type: 'text_complete', text: finalText })
   const markdown = finalText || (looksLikeCypher ? await buildAgentMarkdownFromRows(query, []) : await buildAgentMarkdownFromChunks(query, [], (self as any)['rootDir']))
   onStream?.({ type: 'final', markdown })
-  return { markdown }
+  // Note: without introspecting the tool results thread, we cannot programmatically pluck finalized chunks here.
+  // Callers should process tool_result events for finalize_context to capture selected chunks.
+  return { markdown, transcript: finalText }
 }
 
 export interface RunAgentOptions { onStream?: (e: AgentStreamEvent) => void }
