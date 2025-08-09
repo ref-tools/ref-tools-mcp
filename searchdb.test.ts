@@ -1,9 +1,9 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect } from 'vitest'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import crypto from 'node:crypto'
-import { SearchDB, type Embedder, type Labeler, type RelevanceFilter } from './searchdb'
+import { SearchDB, type ChunkAnnotator, type RelevanceFilter } from './searchdb'
 import type { Chunk } from './chunker'
 
 function sha256Hex(input: string): string {
@@ -25,43 +25,55 @@ function mkChunk(id: string, content: string, filePath = `/tmp/${id}.ts`): Chunk
   }
 }
 
-function tmpCacheFile(): string {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'searchdb-'))
-  return path.join(dir, 'cache.json')
-}
-
 // Simple 2-dim embedder: counts of 'alpha' and 'beta'
-const countEmbedder: Embedder = async (text: string) => {
+const countEmbedder = async (text: string) => {
   const lower = text.toLowerCase()
   const a = (lower.match(/\balpha\b/g) || []).length
   const b = (lower.match(/\bbeta\b/g) || []).length
   return [a, b]
 }
 
+const simpleAnnotator: ChunkAnnotator = {
+  async labelAndEmbed(chunk) {
+    const description = 'desc'
+    const embedding = await countEmbedder(`${description}\n\n${chunk.content}`)
+    return { description, embedding }
+  },
+  async embed(text) {
+    return countEmbedder(text)
+  },
+}
+
 describe('SearchDB', () => {
-  let cachePath: string
-
-  beforeEach(() => {
-    cachePath = tmpCacheFile()
-  })
-
   it('caches description and embeddings by contentHash', async () => {
-    let labelCalls = 0
-    let embedCalls = 0
-    const labeler: Labeler = async (chunk) => {
-      labelCalls++
-      return `Brief label for ${chunk.name} mentioning foo()`
-    }
-    const embedder: Embedder = async (text) => {
-      embedCalls++
-      return countEmbedder(text)
-    }
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'searchdb-'))
+    const cachePath = path.join(dir, 'cache.json')
+    let calls = 0
+    const makeCachingAnnotator = (file: string): ChunkAnnotator => ({
+      async labelAndEmbed(chunk) {
+        const key = chunk.contentHash || sha256Hex(chunk.content)
+        let map: Record<string, any> = {}
+        if (fs.existsSync(file)) {
+          map = JSON.parse(fs.readFileSync(file, 'utf8') || '{}')
+        }
+        if (map[key]) return map[key]
+        calls++
+        const description = `Brief label for ${chunk.name} mentioning foo()`
+        const embedding = await countEmbedder(`${description}\n\n${chunk.content}`)
+        map[key] = { description, embedding }
+        fs.writeFileSync(file, JSON.stringify(map))
+        return map[key]
+      },
+      async embed(text) {
+        return countEmbedder(text)
+      },
+    })
 
     const c = mkChunk('c1', 'alpha content here')
-    const db1 = new SearchDB({ labeler, embedder, cachePath })
+    const ann1 = makeCachingAnnotator(cachePath)
+    const db1 = new SearchDB({ annotator: ann1 })
     await db1.addChunk(c)
-    expect(labelCalls).toBe(1)
-    expect(embedCalls).toBe(1)
+    expect(calls).toBe(1)
     // Ensure cache file written
     const raw = fs.readFileSync(cachePath, 'utf8')
     const parsed = JSON.parse(raw)
@@ -70,20 +82,14 @@ describe('SearchDB', () => {
     expect(typeof parsed[c.contentHash].description).toBe('string')
 
     // New instance should reuse cache and not call label/embed again
-    const db2 = new SearchDB({
-      cachePath,
-      labeler: async () => {
-        throw new Error('labeler should not be called for cached item')
-      },
-      embedder: async () => {
-        throw new Error('embedder should not be called for cached item')
-      },
-    })
+    const ann2 = makeCachingAnnotator(cachePath)
+    const db2 = new SearchDB({ annotator: ann2 })
     await db2.addChunk(c)
+    expect(calls).toBe(1)
   })
 
   it('BM25 returns token-matching chunks', async () => {
-    const db = new SearchDB({ cachePath, embedder: countEmbedder, labeler: async () => 'desc' })
+    const db = new SearchDB({ annotator: simpleAnnotator })
     const a = mkChunk('a', 'database connection pool manager')
     const b = mkChunk('b', 'image processing pipeline for photos')
     await db.addChunks([a, b])
@@ -93,7 +99,7 @@ describe('SearchDB', () => {
   })
 
   it('KNN returns embedding nearest neighbors', async () => {
-    const db = new SearchDB({ cachePath, embedder: countEmbedder, labeler: async () => 'desc' })
+    const db = new SearchDB({ annotator: simpleAnnotator })
     const a = mkChunk('a', 'alpha alpha here')
     const b = mkChunk('b', 'beta beta here')
     await db.addChunks([a, b])
@@ -103,7 +109,7 @@ describe('SearchDB', () => {
   })
 
   it('hybrid merges bm25 and knn candidates', async () => {
-    const db = new SearchDB({ cachePath, embedder: countEmbedder, labeler: async () => 'desc' })
+    const db = new SearchDB({ annotator: simpleAnnotator })
     const bm25Chunk = mkChunk('t', 'unique textonly tokens zyxwv zyxwv zyxwv')
     const knnChunk = mkChunk('k', 'alpha alpha content')
     await db.addChunks([bm25Chunk, knnChunk])
@@ -119,7 +125,7 @@ describe('SearchDB', () => {
       // Keep only items whose content includes 'alpha'
       return chunks.filter((c) => /\balpha\b/i.test(c.content))
     }
-    const db = new SearchDB({ cachePath, embedder: countEmbedder, labeler: async () => 'desc', relevanceFilter })
+    const db = new SearchDB({ annotator: simpleAnnotator, relevanceFilter })
     const x = mkChunk('x', 'alpha something')
     const y = mkChunk('y', 'other')
     await db.addChunks([x, y])

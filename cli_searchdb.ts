@@ -3,8 +3,8 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import crypto from 'node:crypto'
-import { SearchDB, defaultEmbedder, defaultLabeler } from './searchdb'
-import { makeOpenAILabeler, makeOpenAIEmbedder } from './openai_searchdb'
+import { SearchDB, defaultAnnotator } from './searchdb'
+import { makeOpenAIAnnotator } from './openai_searchdb'
 import type { Chunk } from './chunker'
 
 type Args = {
@@ -80,21 +80,22 @@ async function main() {
     relations: [],
   }
 
-  const labeler = args.openai ? makeOpenAILabeler({ apiKey, model: labelModel }) : defaultLabeler
-  const embedder = args.openai ? makeOpenAIEmbedder({ apiKey, model: embedModel }) : defaultEmbedder
+  const annotator = args.openai
+    ? makeOpenAIAnnotator({ apiKey, labelModel, embedModel })
+    : defaultAnnotator
 
-  const db = new SearchDB({ labeler, embedder })
+  const db = new SearchDB({ annotator })
   await db.addChunk(chunk)
 
   if (args.mode === 'label' || args.mode === 'both') {
-    const desc = await labeler(chunk)
-    console.log('Label:', desc)
+    const { description } = await annotator.labelAndEmbed(chunk)
+    console.log('Label:', description)
   }
   if (args.mode === 'embed' || args.mode === 'both') {
-    const desc = await labeler(chunk)
-    const vec = await embedder(`${desc}\n\n${chunk.content}`)
+    const { description } = await annotator.labelAndEmbed(chunk)
+    const vec = await annotator.embed(`${description}\n\n${chunk.content}`)
     console.log('Embedding dim:', vec.length)
-    console.log('Embedding preview:', vec.slice(0, 8).map((v) => v.toFixed(4)).join(', '))
+    console.log('Embedding preview:', vec.slice(0, 8).map((v: number) => v.toFixed(4)).join(', '))
   }
 }
 

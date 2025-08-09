@@ -1,41 +1,18 @@
-import fs from 'node:fs'
 import path from 'node:path'
-import os from 'node:os'
 import crypto from 'node:crypto'
 import { type Chunk } from './chunker'
 
-export type Embedder = (text: string) => Promise<number[]>
-export type Labeler = (chunk: Chunk) => Promise<string>
 export type RelevanceFilter = (query: string, items: Chunk[]) => Promise<Chunk[]>
+
+export type Annotation = { description: string; embedding: number[] }
+export interface ChunkAnnotator {
+  labelAndEmbed(chunk: Chunk): Promise<Annotation>
+  embed(text: string): Promise<number[]>
+}
 
 export type SearchOptions = {
   knnK?: number
   bm25K?: number
-}
-
-type CacheEntry = { embedding: number[]; description: string }
-
-function defaultCachePath(): string {
-  const dir = path.join(os.homedir(), '.ref')
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
-  return path.join(dir, 'search-cache.json')
-}
-
-function readCache(file: string): Record<string, CacheEntry> {
-  try {
-    if (!fs.existsSync(file)) return {}
-    const raw = fs.readFileSync(file, 'utf8')
-    if (!raw.trim()) return {}
-    return JSON.parse(raw)
-  } catch {
-    return {}
-  }
-}
-
-function writeCache(file: string, data: Record<string, CacheEntry>) {
-  const tmp = `${file}.tmp-${process.pid}-${Date.now()}`
-  fs.writeFileSync(tmp, JSON.stringify(data, null, 2))
-  fs.renameSync(tmp, file)
 }
 
 function tokenize(text: string): string[] {
@@ -124,19 +101,14 @@ class BM25Index {
 export class SearchDB {
   private byId = new Map<string, { chunk: Chunk; description: string; embedding: number[] }>()
   private bm25 = new BM25Index()
-  private cachePath: string
-  private cache: Record<string, CacheEntry>
 
   constructor(
     private opts: {
-      embedder?: Embedder
-      labeler?: Labeler
+      annotator?: ChunkAnnotator
       relevanceFilter?: RelevanceFilter
-      cachePath?: string
     } = {},
   ) {
-    this.cachePath = opts.cachePath || defaultCachePath()
-    this.cache = readCache(this.cachePath)
+    // no-op
   }
 
   // CRUD
@@ -149,22 +121,8 @@ export class SearchDB {
   }
 
   async addChunk(chunk: Chunk): Promise<void> {
-    const contentHash = chunk.contentHash || sha256Hex(chunk.content)
-    const cached = this.cache[contentHash]
-    let description: string
-    let embedding: number[]
-    if (cached) {
-      description = cached.description
-      embedding = cached.embedding
-    } else {
-      const labeler = this.opts.labeler || defaultLabeler
-      description = await labeler(chunk)
-      const embedder = this.opts.embedder || defaultEmbedder
-      const combined = `${description}\n\n${chunk.content}`
-      embedding = await embedder(combined)
-      this.cache[contentHash] = { description, embedding }
-      writeCache(this.cachePath, this.cache)
-    }
+    const annotator = this.opts.annotator || defaultAnnotator
+    const { description, embedding } = await annotator.labelAndEmbed(chunk)
 
     // Store and update BM25
     this.byId.set(chunk.id, { chunk, description, embedding })
@@ -199,8 +157,8 @@ export class SearchDB {
       .map(([id]) => id)
 
     // KNN candidates
-    const embedder = this.opts.embedder || defaultEmbedder
-    const qVec = await embedder(query)
+    const annotator = this.opts.annotator || defaultAnnotator
+    const qVec = await annotator.embed(query)
     const knnCandidates = Array.from(this.byId.entries())
       .map(([id, e]) => ({ id, s: cosine(qVec, e.embedding) }))
       .sort((a, b) => b.s - a.s)
@@ -238,11 +196,6 @@ export class SearchDB {
 
 // -------------- Defaults (networked). Kept simple; tests should stub. --------------
 
-// Very small helper to avoid accidental collisions with missing hash
-function sha256Hex(input: string): string {
-  return crypto.createHash('sha256').update(input).digest('hex')
-}
-
 export async function defaultLabeler(chunk: Chunk): Promise<string> {
   // Heuristic fallback if network is unavailable; include function name if present
   const name = chunk.name ? ` ${chunk.name}` : ''
@@ -267,4 +220,15 @@ export async function defaultEmbedder(text: string): Promise<number[]> {
   return vec
 }
 
-// Default relevance is implemented inline in search()
+class DefaultAnnotatorImpl implements ChunkAnnotator {
+  async labelAndEmbed(chunk: Chunk): Promise<Annotation> {
+    const description = await defaultLabeler(chunk)
+    const embedding = await defaultEmbedder(`${description}\n\n${chunk.content}`)
+    return { description, embedding }
+  }
+  async embed(text: string): Promise<number[]> {
+    return defaultEmbedder(text)
+  }
+}
+
+export const defaultAnnotator: ChunkAnnotator = new DefaultAnnotatorImpl()
