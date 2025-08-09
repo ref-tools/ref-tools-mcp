@@ -14,7 +14,8 @@ export function callUiHello() {
   const html = `<!doctype html>
 <html>
   <body style="background-color: #000000; height: 640px;">
-    <h1 style="color: #ffffff;">v6 - height test</h1>
+    <h1 style="color: #ffffff;">v7 - local file</h1>
+    <a href="cursor://Users/matt/code/ref-tools-mcp/helloui.ts">Local file</a>
     <script>
     window.parent.postMessage(
         {
