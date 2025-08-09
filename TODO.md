@@ -43,7 +43,9 @@
 [] tool search_code() to find info about the repo that calls search agent
 
 # visual results
-[] Update SearchAgent to optionally be able to return a visual with mcp-ui
+[x] Update SearchAgent to optionally be able to return a visual with mcp-ui https://github.com/ref-tools/ref-tools-mcp/pull/16
+[] improve the UI and make it more digest able across
+[] add more larger repos
 
 # see how much it can improve itself
 [] generate a bench mark test for each searchdb, graphdb (save results to a file, have a ui for viewing)

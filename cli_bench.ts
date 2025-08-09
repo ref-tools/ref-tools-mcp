@@ -3,6 +3,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
 import { execSync, spawnSync } from 'node:child_process'
+import http from 'node:http'
 import { chunkCodebase, type Chunk } from './chunker'
 import { GraphDB } from './graphdb'
 import { SearchDB } from './searchdb'
@@ -374,14 +375,61 @@ async function cmdViz(mode?: 'quiet') {
   if (!fs.existsSync(htmlPath)) {
     fs.writeFileSync(htmlPath, VIEWER_HTML)
   }
-  if (mode !== 'quiet') {
-    console.log(`Open viewer: ${htmlPath}`)
-    // Try to open in default browser if possible
-    const opener = process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'start' : 'xdg-open'
-    const res = spawnSync(opener, [htmlPath], { stdio: 'ignore' })
-    if (res.error) {
-      console.log('Could not auto-open browser. Please open the path above manually.')
+
+  // In quiet mode (used by run), just ensure files exist and return.
+  if (mode === 'quiet') return
+
+  // Start a minimal static server rooted at BENCH_DIR so the viewer can fetch JSON over HTTP.
+  const server = http.createServer((req, res) => {
+    try {
+      const reqUrl = new URL(req.url || '/', 'http://localhost')
+      const pathname = decodeURIComponent(reqUrl.pathname)
+      let fsPath = path.join(BENCH_DIR, pathname)
+      const resolved = path.resolve(fsPath)
+      if (!resolved.startsWith(BENCH_DIR)) {
+        res.writeHead(403)
+        res.end('Forbidden')
+        return
+      }
+      if (fs.existsSync(resolved) && fs.statSync(resolved).isDirectory()) {
+        fsPath = path.join(resolved, 'index.html')
+      } else {
+        fsPath = resolved
+      }
+      if (!fs.existsSync(fsPath)) {
+        res.writeHead(404)
+        res.end('Not found')
+        return
+      }
+      const ext = path.extname(fsPath).toLowerCase()
+      const mime =
+        ext === '.html' ? 'text/html; charset=utf-8' :
+        ext === '.json' ? 'application/json; charset=utf-8' :
+        ext === '.js' ? 'text/javascript; charset=utf-8' :
+        ext === '.css' ? 'text/css; charset=utf-8' :
+        'application/octet-stream'
+      res.writeHead(200, { 'Content-Type': mime })
+      fs.createReadStream(fsPath).pipe(res)
+    } catch (e) {
+      res.writeHead(500)
+      res.end('Server error')
     }
+  })
+
+  await new Promise<void>((resolve) => {
+    server.listen(0, '127.0.0.1', () => resolve())
+  })
+  const addr = server.address()
+  const port = typeof addr === 'object' && addr && 'port' in addr ? (addr as any).port : 0
+  const url = `http://localhost:${port}/viewer/index.html`
+  console.log(`Serving bench at http://localhost:${port}/`)
+  console.log(`Open viewer: ${url}`)
+
+  // Try to open in default browser if possible
+  const opener = process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'start' : 'xdg-open'
+  const res = spawnSync(opener, [url], { stdio: 'ignore' })
+  if ((res as any).error) {
+    console.log('Could not auto-open browser. Please open the URL above manually.')
   }
 }
 
