@@ -25,9 +25,11 @@
     "dist"
   ],
   "dependencies": {
+    "@ai-sdk/openai": "^1.1.0",
     "@mcp-ui/server": "^5.2.0",
     "@modelcontextprotocol/inspector": "^0.16.1",
     "@modelcontextprotocol/sdk": "^1.0.3",
+    "ai": "^4.0.0-canary.5",
     "axios": "^1.8.4",
     "tree-sitter": "0.21.1",
     "tree-sitter-c": "0.23.0",
@@ -36,8 +38,7 @@
     "tree-sitter-python": "0.21.0",
     "tree-sitter-ruby": "^0.23.1",
     "tree-sitter-typescript": "^0.23.2",
-    "ai": "^4.0.0-canary.5",
-    "@ai-sdk/openai": "^1.1.0"
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "@types/node": "^22.10.1",

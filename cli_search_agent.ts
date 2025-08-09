@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
-import SearchAgent, { type QueryResult } from './search_agent'
+import SearchAgent, { type QueryResult, type AgentStreamEvent, runAgentWithStreaming } from './search_agent'
 
 function usage() {
   return [
@@ -14,6 +14,9 @@ function usage() {
     '  --root <dir>        Root directory (default: cwd)',
     '  --languages <list>  Comma-separated languages to enable',
     '  --cypher            Treat --query as Cypher (graph query)',
+    '  --agent             Use LLM agent (AI SDK) with streaming output',
+    '  --model <name>      Agent model (default: gpt-5)',
+    '  --api-key <key>     OpenAI API key (or set OPENAI_API_KEY)',
     '  --watch             Keep a background watcher running',
     '  --bm25K <n>         BM25 candidates (default 5)',
     '  --knnK <n>          KNN candidates (default 5)',
@@ -74,11 +77,38 @@ async function run() {
   }
   const languages = (args.languages as string | undefined)?.split(',').map((s) => s.trim())
   const treatAsCypher = !!args.cypher
+  const useAgent = !!args.agent
+  const model = (args.model as string | undefined) || 'gpt-5'
+  const apiKey = (args['api-key'] as string | undefined) || process.env.OPENAI_API_KEY
 
   const s = spinner('Indexing repository...')
-  const agent = new SearchAgent(root, { languages })
+  const agent = new SearchAgent(root, { languages, useOpenAI: useAgent, agentModel: model, openaiApiKey: apiKey || undefined })
   await agent.ingest()
   s.stop('Index ready.')
+
+  if (useAgent) {
+    // Stream live agent output
+    console.log('Agent: starting interactive search...')
+    const render = (e: AgentStreamEvent) => {
+      if (e.type === 'tool_call') {
+        const params = e.name === 'search_graph' ? e.input?.cypher : e.input?.query
+        console.log(`→ Tool ${e.name}(${JSON.stringify(params)})`)
+      } else if (e.type === 'tool_result') {
+        const summary = e.name === 'search_graph' ? `${(e.output as any[]).length} row(s)` : `${(e.output as any[]).length} chunk(s)`
+        console.log(`✓ Result from ${e.name}: ${summary}`)
+      } else if (e.type === 'text_delta') {
+        process.stdout.write(e.text)
+      } else if (e.type === 'text_complete') {
+        // newline after streaming text
+        if (!e.text.endsWith('\n')) console.log()
+      } else if (e.type === 'final') {
+        console.log('\n---\n')
+        console.log(e.markdown)
+      }
+    }
+    await runAgentWithStreaming(agent, query, render)
+    return
+  }
 
   const s2 = spinner('Running query...')
   const result: QueryResult = treatAsCypher

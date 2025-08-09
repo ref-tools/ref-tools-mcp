@@ -4,6 +4,9 @@ import crypto from 'node:crypto'
 import { chunkCodebase, chunkFile, type Chunk } from './chunker'
 import { GraphDB } from './graphdb'
 import { SearchDB, type ChunkAnnotator, type RelevanceFilter } from './searchdb'
+import { streamText, tool as aiTool } from 'ai'
+import { createOpenAI } from '@ai-sdk/openai'
+import { z } from 'zod'
 
 export type SearchAgentOptions = {
   languages?: string[]
@@ -54,7 +57,8 @@ export class SearchAgent {
     const q = query.trim()
     if (this.opts.useOpenAI && (this.opts.openaiApiKey || process.env.OPENAI_API_KEY)) {
       try {
-        return await this.searchWithLLMAgent(q)
+        // Run the interactive agent, but still return programmatic chunks for callers.
+        await runAgentWithStreaming(this, q)
       } catch {
         // fall through to heuristic routing
       }
@@ -180,18 +184,6 @@ export class SearchAgent {
     this.merkleRoot = merkleRoot(Array.from(this.merkleLeaves.entries()))
   }
 
-  private async searchWithLLMAgent(query: string): Promise<QueryResult> {
-    const apiKey = this.opts.openaiApiKey || process.env.OPENAI_API_KEY!
-    const model = this.opts.agentModel || 'gpt-5'
-    const decision = await routeWithOpenAI(apiKey, model, query)
-    if (decision.tool === 'search_graph') {
-      const cy = decision.input
-      return { kind: 'graph', rows: this.graph.run(cy) }
-    } else {
-      const chunks = await this.db.search(decision.input)
-      return { kind: 'search', chunks }
-    }
-  }
 }
 
 // ------- Builders -------
@@ -291,49 +283,141 @@ function walkDirSimple(root: string): string[] {
 
 export default SearchAgent
 
-// -------- Optional LLM Agent routing (OpenAI Responses) --------
-export async function routeWithOpenAI(
-  apiKey: string,
-  model: string,
-  query: string,
-): Promise<{ tool: 'search_graph' | 'search_query'; input: string }> {
-  const system =
-    'You route developer queries to tools. Choose exactly one tool. If the input is a Cypher graph query, pick search_graph with the cypher. Otherwise, pick search_query.'
-  const schema = {
-    type: 'object',
-    properties: {
-      tool: { type: 'string', enum: ['search_graph', 'search_query'] },
-      input: { type: 'string' },
-    },
-    required: ['tool', 'input'],
-    additionalProperties: false,
-  }
-  const body = {
-    model,
-    input: [
-      { role: 'system', content: system },
-      { role: 'user', content: query },
-    ],
-    response_format: { type: 'json_schema', json_schema: { name: 'route', schema } },
-  }
-  const res = await fetch('https://api.openai.com/v1/responses', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify(body),
-  })
-  if (!res.ok) throw new Error(`route error ${res.status}`)
-  const data: any = await res.json()
-  const text: string = data.output
-    .filter((o: any) => o.type === 'message')
-    .map((o: any) => o.content.map((c: any) => c.text).join(''))
-    .join('\n')
-  const parsed = JSON.parse(text)
-  if (parsed.tool !== 'search_graph' && parsed.tool !== 'search_query')
-    throw new Error('bad tool')
-  return parsed
+
+// -------- Agent Streaming Types and Runner --------
+export type AgentStreamEvent =
+  | { type: 'status'; message: string }
+  | { type: 'text_delta'; text: string }
+  | { type: 'text_complete'; text: string }
+  | { type: 'tool_call'; name: 'search_graph' | 'search_query'; input: any }
+  | { type: 'tool_result'; name: 'search_graph' | 'search_query'; output: any }
+  | { type: 'final'; markdown: string }
+
+export interface AgentRunResult {
+  markdown: string
 }
 
-// (class method defined above)
+export async function buildAgentMarkdownFromChunks(query: string, chunks: Chunk[], rootDir: string): Promise<string> {
+  const lines: string[] = []
+  lines.push(`# Search Results`)
+  lines.push('')
+  lines.push(`Query: ${query}`)
+  lines.push('')
+  if (chunks.length === 0) {
+    lines.push('_No results._')
+  } else {
+    for (const c of chunks.slice(0, 10)) {
+      const rel = path.relative(rootDir, c.filePath)
+      lines.push(`- ${rel} : lines ${c.line}-${c.endLine} — ${c.name || c.type}`)
+    }
+  }
+  return lines.join('\n')
+}
+
+export async function buildAgentMarkdownFromRows(query: string, rows: any[]): Promise<string> {
+  const lines: string[] = []
+  lines.push(`# Graph Query Results`)
+  lines.push('')
+  lines.push('```cypher')
+  lines.push(query)
+  lines.push('```')
+  lines.push('')
+  if (rows.length === 0) {
+    lines.push('_No rows._')
+  } else {
+    for (const [i, r] of rows.entries()) {
+      lines.push(`- Row ${i + 1}: \n  \`\`\`json\n${JSON.stringify(r, null, 2)}\n\`\`\``)
+    }
+  }
+  return lines.join('\n')
+}
+
+export async function runAgentWithStreaming(
+  self: SearchAgent,
+  query: string,
+  onStream?: (e: AgentStreamEvent) => void,
+): Promise<AgentRunResult> {
+  const apiKey = self['opts'].openaiApiKey || process.env.OPENAI_API_KEY
+  const modelName = self['opts'].agentModel || 'gpt-5'
+  const looksLikeCypher = /^(MATCH|CREATE)\b/i.test(query) || /^cypher:/i.test(query)
+
+  if (!apiKey) {
+    // Fallback: heuristic single-step plan
+    if (looksLikeCypher) {
+      const cy = query.replace(/^cypher:/i, '').trim()
+      onStream?.({ type: 'tool_call', name: 'search_graph', input: { cypher: cy } })
+      const rows = (self as any)['graph'].run(cy)
+      onStream?.({ type: 'tool_result', name: 'search_graph', output: rows })
+      const md = await buildAgentMarkdownFromRows(cy, rows)
+      onStream?.({ type: 'final', markdown: md })
+      return { markdown: md }
+    } else {
+      onStream?.({ type: 'tool_call', name: 'search_query', input: { query } })
+      const chunks = await (self as any)['db'].search(query)
+      onStream?.({ type: 'tool_result', name: 'search_query', output: chunks })
+      const md = await buildAgentMarkdownFromChunks(query, chunks, (self as any)['rootDir'])
+      onStream?.({ type: 'final', markdown: md })
+      return { markdown: md }
+    }
+  }
+
+  const openai = createOpenAI({ apiKey })
+  const searchGraph = aiTool({
+    description: 'Run a Cypher query on the code graph and return rows.',
+    parameters: z.object({ cypher: z.string() }),
+    execute: async ({ cypher }) => {
+      onStream?.({ type: 'tool_call', name: 'search_graph', input: { cypher } })
+      const rows = (self as any)['graph'].run(cypher)
+      onStream?.({ type: 'tool_result', name: 'search_graph', output: rows })
+      return rows
+    },
+  })
+  const searchQuery = aiTool({
+    description: 'Search the codebase for relevant chunks to a natural language query.',
+    parameters: z.object({ query: z.string() }),
+    execute: async ({ query }) => {
+      onStream?.({ type: 'tool_call', name: 'search_query', input: { query } })
+      const chunks = await (self as any)['db'].search(query)
+      onStream?.({ type: 'tool_result', name: 'search_query', output: chunks })
+      return chunks
+    },
+  })
+
+  const result = await streamText({
+    model: openai(modelName),
+    system:
+      'You are a helpful repository search agent. Choose and call tools to gather facts, then provide a concise markdown summary with links and line ranges. Prefer searching first, then refine or inspect the graph when helpful.',
+    messages: [{ role: 'user', content: query }],
+    tools: { search_graph: searchGraph, search_query: searchQuery },
+  })
+
+  let finalText = ''
+  for await (const ev of result.fullStream) {
+    if (ev.type === 'text-delta') {
+      // @ts-ignore - ai-sdk v4 event shape
+      const t = (ev as any).textDelta || (ev as any).text || ''
+      finalText += t
+      onStream?.({ type: 'text_delta', text: t })
+    }
+    if (ev.type === 'tool-call') {
+      const name = (ev.toolName || 'search_query') as 'search_graph' | 'search_query'
+      onStream?.({ type: 'tool_call', name, input: (ev as any).args })
+    }
+    if (ev.type === 'tool-result') {
+      const name = (ev.toolName || 'search_query') as 'search_graph' | 'search_query'
+      onStream?.({ type: 'tool_result', name, output: (ev as any).result })
+    }
+  }
+  onStream?.({ type: 'text_complete', text: finalText })
+  const markdown = finalText || (looksLikeCypher ? await buildAgentMarkdownFromRows(query, []) : await buildAgentMarkdownFromChunks(query, [], (self as any)['rootDir']))
+  onStream?.({ type: 'final', markdown })
+  return { markdown }
+}
+
+export interface RunAgentOptions { onStream?: (e: AgentStreamEvent) => void }
+export async function runAgent(this: SearchAgent, query: string, opts?: RunAgentOptions): Promise<AgentRunResult> {
+  return runAgentWithStreaming(this, query, opts?.onStream)
+}
+
+// -------- Optional LLM Agent routing (OpenAI Responses) --------
+// (end streaming helpers)
