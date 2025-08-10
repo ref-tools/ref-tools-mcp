@@ -108,10 +108,7 @@ async function run() {
         const params = e.name === 'search_graph' ? e.input?.cypher : e.input?.query
         console.log(`\n→ Tool ${e.name}(${JSON.stringify(params)})`)
       } else if (e.type === 'tool_result') {
-        const summary =
-          e.name === 'search_graph'
-            ? `${(e.output as any[]).length} row(s)`
-            : `${(e.output as any[]).length} chunk(s)`
+        const summary = `${(e.output as any[]).length} chunk(s)`
         console.log(`✓ Result from ${e.name}: ${summary}`)
       } else if (e.type === 'text_delta') {
         process.stdout.write(e.text)
@@ -132,9 +129,9 @@ async function run() {
   s2.stop('Done.')
 
   if (result.kind === 'graph') {
-    // pretty print rows
-    for (const [idx, row] of result.rows.entries()) {
-      console.log(`#${idx + 1}`, JSON.stringify(row, null, 2))
+    for (const c of result.chunks) {
+      const lines = `${c.line}-${c.endLine}`
+      console.log(`• ${path.relative(root, c.filePath)} @ ${lines} (${c.language}) ${c.name || ''}`)
     }
   } else {
     for (const c of result.chunks) {
