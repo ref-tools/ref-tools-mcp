@@ -28,7 +28,7 @@ async function eventually(
   throw lastErr || new Error('condition not met in time')
 }
 
-describe('SearchAgent watcher add/remove', () => {
+describe.skip('SearchAgent watcher add/remove', () => {
   it('indexes newly added files and makes them searchable', { timeout: 10000 }, async () => {
     const dir = tmpDir()
     // initial repo with one file

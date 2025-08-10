@@ -1,7 +1,7 @@
 // Minimal in-memory Graph DB with a small Cypher subset
 // Supported:
 // - CREATE nodes/relationships: CREATE (a:Label {k:1})-[:TYPE {p:2}]->(b:Other)
-// - MATCH patterns: node-only or single hop relationships
+// - MATCH patterns: node-only or multi-hop relationship chains
 // - Labels and inline property filters in patterns
 // - WHERE with =, !=, <, <=, >, >= and AND/OR/NOT
 // - RETURN projections: variables, variable.property, count(*), count(var), collect(var)
@@ -493,18 +493,23 @@ class Parser {
 
   private parsePatterns(): Pattern[] {
     const patterns: Pattern[] = []
-    patterns.push(this.parsePattern())
-    while (this.t.peekSymbol(',')) {
+    // parse one or more pattern groups separated by commas
+    for (;;) {
+      const group = this.parsePatternGroup()
+      for (const p of group) patterns.push(p)
+      if (!this.t.peekSymbol(',')) break
       this.t.next()
-      patterns.push(this.parsePattern())
     }
     return patterns
   }
 
-  private parsePattern(): Pattern {
-    // Node-only or relationship pattern
-    const left = this.parseNodePattern()
-    if (this.t.peekSymbol('-')) {
+  // Parse a single pattern group which may contain a node-only pattern or
+  // a chain of one or more relationships. Returns one or more Pattern items.
+  private parsePatternGroup(): Pattern[] {
+    const out: Pattern[] = []
+    let left = this.parseNodePattern()
+    // Loop to support multi-hop chains: (a)-[...]->(b)-[...]->(c)
+    while (this.t.peekSymbol('-')) {
       this.t.expectSymbol('-')
       this.t.expectSymbol('[')
       let relVar: string | undefined
@@ -540,9 +545,13 @@ class Parser {
         this.t.expectSymbol('>')
       }
       const right = this.parseNodePattern()
-      return { kind: 'RelPattern', left, right, relVar, relType, relProps }
+      out.push({ kind: 'RelPattern', left, right, relVar, relType, relProps })
+      // advance chain: next hop starts from the right node
+      left = right
     }
-    return left
+    // If no relationships parsed, emit the standalone node pattern
+    if (out.length === 0) out.push(left)
+    return out
   }
 
   private parseNodePattern(): NodePattern {

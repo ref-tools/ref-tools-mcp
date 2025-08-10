@@ -185,6 +185,7 @@ export class SearchDB {
         const filtered = await filter(query, items)
         return filtered
       } catch {
+        console.error('Error in relevance filter', filter)
         // fall through to default
       }
     }

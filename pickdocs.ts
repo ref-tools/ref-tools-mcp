@@ -96,7 +96,7 @@ export async function pickChunks(
   const selected = indices.map((i) => presented[i]!).filter(Boolean)
 
   // Console diagnostics similar to pickDocs
-  console.log(`CHUNKS_TO_PICK_FROM:\n${filesBlock}\n\nPICKED_CHUNKS:\n${indices.join(', ')}`)
+  // console.log(`CHUNKS_TO_PICK_FROM:\n${filesBlock}\n\nPICKED_CHUNKS:\n${indices.join(', ')}`)
 
   return { chunks: selected, indices, usage: data.usage }
 }

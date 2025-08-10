@@ -6,6 +6,7 @@ import crypto from 'node:crypto'
 import { SearchDB, defaultAnnotator } from './searchdb'
 import { makeOpenAIAnnotator } from './openai_searchdb'
 import type { Chunk } from './chunker'
+import { pickChunksFilter } from './pickdocs'
 
 type Args = {
   file?: string
@@ -86,7 +87,7 @@ async function main() {
     ? makeOpenAIAnnotator({ apiKey, labelModel, embedModel })
     : defaultAnnotator
 
-  const db = new SearchDB({ annotator })
+  const db = new SearchDB({ annotator, relevanceFilter: pickChunksFilter })
   await db.addChunk(chunk)
 
   if (args.mode === 'label' || args.mode === 'both') {

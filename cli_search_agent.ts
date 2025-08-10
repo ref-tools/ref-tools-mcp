@@ -110,6 +110,7 @@ async function run() {
       } else if (e.type === 'tool_result') {
         const summary = `${(e.output as any[]).length} chunk(s)`
         console.log(`✓ Result from ${e.name}: ${summary}`)
+        e.output.forEach((c: any) => console.log(c.text.split('\n')[0]))
       } else if (e.type === 'text_delta') {
         process.stdout.write(e.text)
       } else if (e.type === 'text_complete') {
@@ -145,7 +146,12 @@ async function run() {
     // keep process alive; SearchAgent watcher runs on interval after ingest if watch enabled
     // enable watch mode by restarting agent with watcher on
     agent.stopWatcher()
-    const agentWithWatch = new SearchAgent(root, { languages, watch: true })
+    const agentWithWatch = new SearchAgent(root, {
+      annotator: apiKey ? makeOpenAIAnnotator({ apiKey }) : undefined,
+      relevanceFilter: apiKey ? pickChunksFilter : undefined,
+      languages,
+      watch: true,
+    })
     await agentWithWatch.ingest()
   }
 }

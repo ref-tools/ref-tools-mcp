@@ -88,6 +88,19 @@ describe('GraphDB - MATCH relationships', () => {
     )
     expect(res).toEqual([{ cnt: 1 }])
   })
+
+  it('supports multi-hop relationship chains in a single pattern', () => {
+    const db = new GraphDB()
+    db.run(
+      "CREATE (f:File:Chunk {filePath:'/src/user.ts'}), (u:Chunk {filePath:'/src/user.ts'}), (d:Chunk {name:'GraphDB'}), (f)-[:CONTAINS]->(u), (u)-[:REFERENCES]->(d)",
+    )
+    const res = db.run(
+      "MATCH (f:File:Chunk)-[:CONTAINS]->(u:Chunk)-[:REFERENCES]->(d:Chunk { name: 'GraphDB' }) RETURN DISTINCT f ORDER BY f.filePath",
+    )
+    expect(res).toHaveLength(1)
+    const f = res[0].f as any
+    expect(f.properties.filePath).toBe('/src/user.ts')
+  })
 })
 
 describe('GraphDB - WHERE', () => {

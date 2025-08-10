@@ -42,7 +42,8 @@ export class SearchAgent {
     private rootDir: string,
     private opts: SearchAgentOptions = {},
   ) {
-    this.db = new SearchDB({ annotator: opts.annotator })
+    // console.log('opts', opts)
+    this.db = new SearchDB({ annotator: opts.annotator, relevanceFilter: opts.relevanceFilter })
   }
 
   // -------- Public API --------
