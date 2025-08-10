@@ -22,12 +22,16 @@ export const visualizeCodeTool: Tool = {
   inputSchema: {
     type: 'object',
     properties: {
-      description: {
+      message: {
         type: 'string',
         description: 'Prompt describing what to visualize about the codebase.',
       },
+      title: {
+        type: 'string',
+        description: 'Optional page title heading to include in the generated UI.',
+      },
     },
-    required: ['description'],
+    required: ['message'],
   },
 }
 
