@@ -161,18 +161,24 @@ export class SearchAgent {
 
     if (changedFiles.length === 0 && removedFiles.size === 0) return
 
-    // Rechunk and update DB for changed files
-    for (const f of changedFiles) {
-      const oldIds = this.fileToChunkIds.get(f)
-      if (oldIds) {
-        for (const id of oldIds) this.db.removeChunk(id)
-        this.fileToChunkIds.delete(f)
-      }
-      const res = await chunkFile(f, { languages: this.opts.languages })
-      if (!res) continue
-      await this.db.addChunks(res)
-      const set = new Set<string>(res.map((c) => c.id))
-      this.fileToChunkIds.set(f, set)
+    // Rechunk and update DB for changed files in parallel batches
+    const batchSize = 5
+    for (let i = 0; i < changedFiles.length; i += batchSize) {
+      const batch = changedFiles.slice(i, i + batchSize)
+      await Promise.all(
+        batch.map(async (f) => {
+          const oldIds = this.fileToChunkIds.get(f)
+          if (oldIds) {
+            for (const id of oldIds) this.db.removeChunk(id)
+            this.fileToChunkIds.delete(f)
+          }
+          const res = await chunkFile(f, { languages: this.opts.languages })
+          if (!res) return
+          await this.db.addChunks(res)
+          const set = new Set<string>(res.map((c) => c.id))
+          this.fileToChunkIds.set(f, set)
+        }),
+      )
     }
 
     // rebuild graph and root

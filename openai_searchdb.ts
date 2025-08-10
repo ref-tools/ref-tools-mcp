@@ -92,7 +92,7 @@ export function makeOpenAIAnnotator(opts: OpenAIAnnotatorOptions): ChunkAnnotato
       const key = chunk.contentHash || sha256Hex(chunk.content)
       const hit = cache[key]
       if (hit) {
-        console.log('OpenAI cache hit for', key)
+        // console.log('OpenAI cache hit for', key)
         return hit
       }
       const description = await openaiLabel(chunk)

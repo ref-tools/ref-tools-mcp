@@ -134,7 +134,7 @@ export class SearchDB {
   }
 
   async addChunks(chunks: Chunk[]): Promise<void> {
-    for (const c of chunks) await this.addChunk(c)
+    await Promise.all(chunks.map((c) => this.addChunk(c)))
   }
 
   async updateChunk(chunk: Chunk): Promise<void> {

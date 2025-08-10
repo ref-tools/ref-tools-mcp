@@ -286,6 +286,8 @@ export async function chunkCodebase(
   const files = walkDir(rootDir, composedFilter)
   const all: Chunk[] = []
   for (const abs of files) {
+    // Skip files that are not of a supported language before attempting to read/parse
+    if (!getLanguageForFile(abs, options.languages)) continue
     const res = await chunkFile(abs, options)
     if (res && res.length) all.push(...res)
   }
