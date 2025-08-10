@@ -585,6 +585,9 @@ const VIEWER_HTML = `<!doctype html>
           <option value="graphdb">GraphDB</option>
         </select>
       </label>
+      <label>Runs
+        <select id="runs" multiple size="4" title="Select one or more runs to display"></select>
+      </label>
       <div id="runMeta" class="muted"></div>
     </div>
     <svg id="chart" viewBox="0 0 1000 520"></svg>
@@ -709,10 +712,37 @@ const VIEWER_HTML = `<!doctype html>
         })
       }
 
+      function getSelectedRuns(){
+        const sel = document.getElementById('runs')
+        const vals = []
+        for (const opt of sel.options){ if (opt.selected) vals.push(opt.value) }
+        return new Set(vals)
+      }
+
+      function setRunOptions(labels){
+        const sel = document.getElementById('runs')
+        const prev = getSelectedRuns()
+        // Rebuild options while preserving prior selections
+        sel.innerHTML = ''
+        for (const name of labels){
+          const opt = document.createElement('option')
+          opt.value = name
+          opt.textContent = name
+          // Default to selected if nothing previously chosen
+          opt.selected = prev.size ? prev.has(name) : true
+          sel.appendChild(opt)
+        }
+      }
+
       async function render(){
         const idx = await fetchJSON('../results/index.json')
         const metaEl = document.getElementById('runMeta');
         if (!idx || !idx.length) { metaEl.textContent = 'No runs yet. Run npm run bench:run'; return }
+        const labels = idx.map((x)=> x.runName || x.runId)
+        // Update run options and preserve selection on refresh
+        setRunOptions(labels)
+        const selected = getSelectedRuns()
+        metaEl.textContent = Array.from(selected).join(' • ')
         async function loadRun(x){
           const byNameKey = safeName(x.runName||'')
           if (byNameKey){
@@ -721,14 +751,19 @@ const VIEWER_HTML = `<!doctype html>
           }
           return await fetchJSON('../results/' + x.runId + '.json')
         }
-        const runs = (await Promise.all(idx.map(loadRun))).filter(Boolean)
-        const names = idx.map((x)=> x.runName || x.runId)
-        metaEl.textContent = names.join(' • ')
+        const loaded = (await Promise.all(idx.map(loadRun))).filter(Boolean)
+        // Filter loaded runs by current selection; rely on idx order alignment
+        const runs = []
+        for (let i=0;i<idx.length;i++){
+          const name = labels[i]
+          if (selected.has(name)) runs.push(loaded[i])
+        }
         const dataset = document.getElementById('dataset').value
         const series = buildSeries(runs, dataset)
         renderChart(series)
       }
       document.getElementById('dataset').addEventListener('change', render)
+      document.getElementById('runs').addEventListener('change', render)
       render(); setInterval(render, 5000)
     </script>
   </body>
