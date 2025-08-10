@@ -3,7 +3,7 @@ import os from 'node:os'
 import path from 'node:path'
 import crypto from 'node:crypto'
 import type { Chunk } from './chunker'
-import type { ChunkAnnotator, Annotation } from './searchdb'
+import { type ChunkAnnotator, type Annotation, defaultLabeler, defaultEmbedder } from './searchdb'
 
 export type OpenAIAnnotatorOptions = {
   apiKey: string
@@ -95,9 +95,21 @@ export function makeOpenAIAnnotator(opts: OpenAIAnnotatorOptions): ChunkAnnotato
         // console.log('OpenAI cache hit for', key)
         return hit
       }
-      const description = await openaiLabel(chunk)
+      let description: string
+      try {
+        description = await openaiLabel(chunk)
+      } catch (err) {
+        console.error('OpenAI label failed, falling back to default labeler:', err)
+        description = await defaultLabeler(chunk)
+      }
       const combined = `${description}\n\n${chunk.content}`
-      const embedding = await openaiEmbed(combined)
+      let embedding: number[]
+      try {
+        embedding = await openaiEmbed(combined)
+      } catch (err) {
+        console.error('OpenAI embed failed, falling back to default embedder:', err)
+        embedding = await defaultEmbedder(combined)
+      }
       const value = { description, embedding }
       cache[key] = value
       writeCache(cacheFile, cache)
@@ -109,7 +121,13 @@ export function makeOpenAIAnnotator(opts: OpenAIAnnotatorOptions): ChunkAnnotato
       if (hit && Array.isArray(hit.embedding)) {
         return hit.embedding
       }
-      const embedding = await openaiEmbed(text)
+      let embedding: number[]
+      try {
+        embedding = await openaiEmbed(text)
+      } catch (err) {
+        console.error('OpenAI embed (query) failed, falling back to default embedder:', err)
+        embedding = await defaultEmbedder(text)
+      }
       // Store with empty description to share file with chunk cache
       cache[key] = { description: '', embedding }
       writeCache(cacheFile, cache)

@@ -109,10 +109,11 @@ class BM25Index {
     if (qTermsArr.length === 0) return []
     const seen = new Set<string>()
     const qTerms: string[] = []
-    for (const t of qTermsArr) if (!seen.has(t)) {
-      seen.add(t)
-      qTerms.push(t)
-    }
+    for (const t of qTermsArr)
+      if (!seen.has(t)) {
+        seen.add(t)
+        qTerms.push(t)
+      }
     const N = Math.max(1, this.docs.size)
     const avgdl = this.totalLen > 0 ? this.totalLen / N : 0.0001
     const scores = new Map<string, number>()
@@ -382,7 +383,17 @@ export class SearchDB {
 
   async addChunk(chunk: Chunk): Promise<void> {
     const annotator = this.opts.annotator || defaultAnnotator
-    const { description, embedding } = await annotator.labelAndEmbed(chunk)
+    let description: string
+    let embedding: number[]
+    try {
+      const ann = await annotator.labelAndEmbed(chunk)
+      description = ann.description
+      embedding = ann.embedding
+    } catch (err) {
+      console.error('Annotation failed for chunk, using defaults:', chunk.id, err)
+      description = await defaultLabeler(chunk)
+      embedding = await defaultEmbedder(`${description}\n\n${chunk.content}`)
+    }
 
     // Store and update BM25
     this.byId.set(chunk.id, { ...chunk, description, embedding })
