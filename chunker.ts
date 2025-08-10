@@ -200,7 +200,7 @@ export async function chunkFile(
     // tree-sitter may throw "Invalid argument" for certain inputs; catch and return file-only chunk
     tree = parser.parse(source) as unknown as { rootNode: SyntaxNode }
   } catch (e) {
-    console.error(`Failed to parse ${filePath}`, e)
+    // console.error(`Failed to parse ${filePath}`, e)
     // Return only the file chunk if parsing fails
     return chunks
   }
