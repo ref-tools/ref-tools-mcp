@@ -369,12 +369,28 @@ async function benchGraphDB(chunks: Chunk[], iterations = 5) {
 async function cmdRun() {
   const iterations = Number(process.env.BENCH_ITERS || '1')
   ensureDir(RESULTS_DIR)
-  const modeArg = process.argv[3]
+  // Parse args after the subcommand (index 2)
+  const argv = process.argv.slice(3)
+  const modeArg = argv.find((a) => !a.startsWith('-'))
   const reposToUse = selectRepos(modeArg)
+  // Optional experiment/run name via --name <str> | --name=<str> | BENCH_NAME
+  let runName: string | undefined = process.env.BENCH_NAME
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i]!
+    if (a === '--name' && argv[i + 1] && !argv[i + 1]!.startsWith('-')) {
+      runName = argv[i + 1]!
+      break
+    }
+    if (a.startsWith('--name=')) {
+      runName = a.slice('--name='.length)
+      break
+    }
+  }
   const runId = `run-${Date.now()}`
   const startedAt = new Date().toISOString()
   const results: any = {
     runId,
+    runName: runName || runId,
     startedAt,
     iterations,
     system: {
@@ -430,6 +446,7 @@ async function cmdRun() {
   }
   const summary = {
     runId: results.runId,
+    runName: results.runName,
     startedAt: results.startedAt,
     iterations: results.iterations,
     repos: results.repos.map((x: any) => ({
@@ -538,7 +555,7 @@ const VIEWER_HTML = `<!doctype html>
   </head>
   <body>
     <h1>Latency vs Repo Size</h1>
-    <div class="muted">One line per query type. X: repo chunks, Y: mean latency (ms).</div>
+    <div class="muted">One dot per repo, error bars show 95% CI across queries. X: repo chunks, Y: mean latency (ms). Multiple experiments overlayed.</div>
     <div class="controls">
       <label>Dataset
         <select id="dataset">
@@ -555,15 +572,38 @@ const VIEWER_HTML = `<!doctype html>
       function fmt(n){ return typeof n==='number'? n.toFixed(1): n }
       const COLORS = ['#2563eb','#16a34a','#dc2626','#7c3aed','#db2777','#059669','#f59e0b','#0ea5e9','#a855f7','#ef4444']
 
-      function buildSeries(run, dataset){
-        const repos = (run?.repos||[]).slice().sort((a,b)=> (a.numChunks||0) - (b.numChunks||0))
-        const series = {} // label -> [{x,y, repo}]
-        for (const r of repos){
-          const q = (r[dataset]||{}).queries || {}
-          for (const [key, v] of Object.entries(q)){
-            const label = dataset==='graphdb' ? key : (v.label || key)
+      function summarize(times){
+        const arr = (times||[]).filter((n)=> typeof n==='number' && isFinite(n))
+        const n = Math.max(1, arr.length)
+        const mean = arr.reduce((a,b)=>a+b,0)/n
+        const variance = arr.reduce((acc,t)=> acc + Math.pow(t-mean,2),0) / (arr.length>1? arr.length-1:1)
+        const stdev = Math.sqrt(variance)
+        const sem = stdev / Math.sqrt(n)
+        const ci95 = 1.96 * sem
+        return { mean, ci95 }
+      }
+
+      function aggregateRepo(repo, dataset){
+        const ds = repo?.[dataset]
+        const q = (ds && ds.queries) || {}
+        const all = []
+        for (const v of Object.values(q)){
+          const times = (v && v.times) || []
+          for (const t of times) all.push(t)
+        }
+        return summarize(all)
+      }
+
+      function buildSeries(runs, dataset){
+        const series = {} // runLabel -> [{x,y,err,repo}]
+        for (let i=0;i<runs.length;i++){
+          const run = runs[i]
+          const label = run.runName || run.runId || ('run#'+i)
+          const repos = (run?.repos||[]).slice().sort((a,b)=> (a.numChunks||0) - (b.numChunks||0))
+          for (const r of repos){
+            const agg = aggregateRepo(r, dataset)
             if (!series[label]) series[label] = []
-            series[label].push({ x: r.numChunks||0, y: (v.mean||0), repo: r.name })
+            series[label].push({ x: r.numChunks||0, y: agg.mean||0, err: agg.ci95||0, repo: r.name })
           }
         }
         return series
@@ -576,7 +616,7 @@ const VIEWER_HTML = `<!doctype html>
         svg.innerHTML = ''
         const allX = [], allY = []
         for (const pts of Object.values(series)){
-          for (const p of pts){ allX.push(p.x); allY.push(p.y) }
+          for (const p of pts){ allX.push(p.x); allY.push(p.y + (p.err||0)) }
         }
         const xMin = 0, xMax = Math.max(1, Math.max(...allX, 1))
         const yMin = 0, yMax = Math.max(1, Math.max(...allY, 1))
@@ -588,6 +628,7 @@ const VIEWER_HTML = `<!doctype html>
         function text(x,y,t,anchor='middle'){ const el=document.createElementNS(ns,'text'); el.setAttribute('x',x); el.setAttribute('y',y); el.setAttribute('text-anchor',anchor); el.textContent=t; return el }
         function path(d, color){ const el=document.createElementNS(ns,'path'); el.setAttribute('d',d); el.setAttribute('fill','none'); el.setAttribute('stroke',color); el.setAttribute('stroke-width','2'); return el }
         function circle(x,y,color){ const el=document.createElementNS(ns,'circle'); el.setAttribute('cx',x); el.setAttribute('cy',y); el.setAttribute('r','3'); el.setAttribute('fill',color); return el }
+        function vbar(x, y1, y2, color){ const el=document.createElementNS(ns,'path'); const d = 'M '+x+' '+y1+' L '+x+' '+y2+' M '+(x-5)+' '+y1+' L '+(x+5)+' '+y1+' M '+(x-5)+' '+y2+' L '+(x+5)+' '+y2; el.setAttribute('d', d); el.setAttribute('stroke', color); el.setAttribute('stroke-width','1.5'); el.setAttribute('fill','none'); return el }
 
         // Axes
         const gAxes = document.createElementNS(ns,'g'); gAxes.setAttribute('class','axis')
@@ -621,7 +662,13 @@ const VIEWER_HTML = `<!doctype html>
             d += (j===0? 'M':' L') + X + ' ' + Y
           }
           svg.appendChild(path(d, color))
-          for (const p of pts){ svg.appendChild(circle(sx(p.x), sy(p.y), color)) }
+          for (const p of pts){
+            const X = sx(p.x), Y = sy(p.y)
+            svg.appendChild(circle(X, Y, color))
+            const yTop = sy(Math.max(0, p.y - (p.err||0)))
+            const yBot = sy(p.y + (p.err||0))
+            svg.appendChild(vbar(X, yTop, yBot, color))
+          }
           const chip = document.createElement('div'); chip.className='chip'; chip.innerHTML = '<span class="dot" style="background:'+color+'"></span><span>'+label+'</span>'
           legend.appendChild(chip)
         })
@@ -631,11 +678,11 @@ const VIEWER_HTML = `<!doctype html>
         const idx = await fetchJSON('../results/index.json')
         const metaEl = document.getElementById('runMeta');
         if (!idx || !idx.length) { metaEl.textContent = 'No runs yet. Run npm run bench:run'; return }
-        const last = idx[idx.length-1]
-        metaEl.textContent = last.runId + ' • ' + last.startedAt + ' • iters: ' + last.iterations
-        const run = await fetchJSON('../results/' + last.runId + '.json')
+        const runs = await Promise.all(idx.map(async (x)=> await fetchJSON('../results/' + x.runId + '.json')))
+        const names = idx.map((x)=> x.runName || x.runId)
+        metaEl.textContent = names.join(' • ')
         const dataset = document.getElementById('dataset').value
-        const series = buildSeries(run, dataset)
+        const series = buildSeries(runs, dataset)
         renderChart(series)
       }
       document.getElementById('dataset').addEventListener('change', render)
@@ -657,8 +704,9 @@ async function main() {
       await cmdViz()
       break
     default:
-      console.log('Usage: tsx cli_bench.ts <setup|run|viz> [small]')
-      console.log('Env: BENCH_ITERS=5, BENCH_MODE=small, BENCH_REPOS=chalk,axios')
+      console.log('Usage: tsx cli_bench.ts <setup|run|viz> [small] [--name <experiment>]')
+      console.log('Env: BENCH_ITERS=5, BENCH_MODE=small, BENCH_REPOS=chalk,axios, BENCH_NAME="My Experiment"')
+      console.log('Example via npm: npm run bench:run -- --name "exp-1"')
   }
 }
 
