@@ -22,5 +22,3 @@ describe('callVisualizeCode', () => {
     expect(String(res.content[0]?.text || '')).toContain('Missing OPENAI_API_KEY')
   })
 })
-
-

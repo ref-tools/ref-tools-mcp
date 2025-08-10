@@ -63,6 +63,11 @@ https://github.com/ref-tools/ref-tools-mcp/pull/15
 [x] optimize the shit out of searchdb https://github.com/ref-tools/ref-tools-mcp/pull/27
 [] rewrite in rust with bindings (do on repeat) https://github.com/ref-tools/ref-tools-mcp/pull/28
 
+redo benchmarks now indexing looks fine WITHOUT pickdocs
+[] initial f223b6aeafdf29b4227c51d9373562340ce12a20
+[] optimized 92fa3ad42a09c07d16a66cf65bef71c5fffcbdfe
+[] rust  886893a6a6e3ca2c51059f0f560708296e53e603
+
 # demo script
 - i build ref tools, find context for coding agents, specializing in finding exactly the right tokens and nothing more
 - for this hackathons the goal is see what gpt5 can do so i decided to work on adding code-indexing to ref's mcp server
