@@ -21,7 +21,12 @@ import { createServer } from 'http'
 import { randomUUID } from 'crypto'
 import { uiHelloTool, callUiHello } from './helloui.js'
 import { generateUiTool, callGenerateUi } from './genui.js'
-import SearchAgent, { createSearchGraphTool, createSearchQueryTool } from './search_agent.js'
+import SearchAgent, {
+  createSearchGraphTool,
+  createSearchQueryTool,
+  SEARCH_GRAPH_DESCRIPTION,
+  SEARCH_QUERY_DESCRIPTION,
+} from './search_agent.js'
 
 // Tool configuration based on client type
 type ToolConfig = {
@@ -124,13 +129,12 @@ function createServerInstance(mcpClient: string = 'unknown', sessionId?: string)
     tools: [
       searchTool,
       readTool,
-      // Conditionally expose local code search tools when configured
-      ...(codeSearchAgent && process.env.REF_DIRECTORY && process.env.OPENAI_API_KEY
+      // Conditionally expose local code search tools when configured (env-gated)
+      ...(process.env.REF_DIRECTORY && process.env.OPENAI_API_KEY
         ? ([
             {
               name: 'search_code_text',
-              description:
-                'Search the configured REF_DIRECTORY codebase for relevant code chunks using natural language.',
+              description: SEARCH_QUERY_DESCRIPTION,
               inputSchema: {
                 type: 'object',
                 properties: { query: { type: 'string', description: 'Natural language query' } },
@@ -139,8 +143,7 @@ function createServerInstance(mcpClient: string = 'unknown', sessionId?: string)
             },
             {
               name: 'search_code_graph',
-              description:
-                'Query the code graph (Cypher subset) over the configured REF_DIRECTORY to return matching chunks.',
+              description: SEARCH_GRAPH_DESCRIPTION,
               inputSchema: {
                 type: 'object',
                 properties: { cypher: { type: 'string', description: 'Cypher query' } },

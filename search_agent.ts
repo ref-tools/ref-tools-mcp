@@ -9,6 +9,12 @@ import { streamText, tool as aiTool } from 'ai'
 import { createOpenAI } from '@ai-sdk/openai'
 import { z } from 'zod'
 
+// Shared descriptions for search tools (reused by MCP)
+export const SEARCH_GRAPH_DESCRIPTION =
+  'Run a Cypher query on the code graph and return matching chunks. Supported (subset): CREATE, MATCH (node-only or single hop), labels (:Label) and inline property filters, WHERE with =, !=, <, <=, >, >= and AND/OR/NOT, RETURN variables and properties, count(*), count(var), collect(var), AS aliases, DISTINCT, ORDER BY, LIMIT. Labels: Chunk, Code, File. Relationships: REFERENCES, CONTAINS. Introspection: CALL db.labels(). Note: chunks are extracted from returned node values. If you return only scalar properties (e.g., d.filePath), the tool will resolve filePath strings to their file chunks; returning node variables (e.g., RETURN d) is still recommended.'
+export const SEARCH_QUERY_DESCRIPTION =
+  'Search the codebase for relevant chunks to a natural language query. Should be a full-sentance in natural language describing what you want to find.'
+
 export type SearchAgentOptions = {
   languages?: string[]
   annotator?: ChunkAnnotator
@@ -347,8 +353,7 @@ export default SearchAgent
 // -------- Agent Streaming Types and Runner --------
 export function createSearchGraphTool(self: SearchAgent) {
   return aiTool({
-    description:
-      'Run a Cypher query on the code graph and return matching chunks. Supported (subset): CREATE, MATCH (node-only or single hop), labels (:Label) and inline property filters, WHERE with =, !=, <, <=, >, >= and AND/OR/NOT, RETURN variables and properties, count(*), count(var), collect(var), AS aliases, DISTINCT, ORDER BY, LIMIT. Labels: Chunk, Code, File. Relationships: REFERENCES, CONTAINS. Introspection: CALL db.labels(). Note: chunks are extracted from returned node values. If you return only scalar properties (e.g., d.filePath), the tool will resolve filePath strings to their file chunks; returning node variables (e.g., RETURN d) is still recommended.',
+    description: SEARCH_GRAPH_DESCRIPTION,
     parameters: z.object({ cypher: z.string() }),
     execute: async ({ cypher }) => {
       const rows = (self as any)['graph'].run(cypher)
@@ -364,8 +369,7 @@ export function createSearchGraphTool(self: SearchAgent) {
 
 export function createSearchQueryTool(self: SearchAgent) {
   return aiTool({
-    description:
-      'Search the codebase for relevant chunks to a natural language query. Should be a full-sentance in natural language describing what you want to find.',
+    description: SEARCH_QUERY_DESCRIPTION,
     parameters: z.object({ query: z.string() }),
     execute: async ({ query }) => {
       const chunks = await (self as any)['db'].search(query)
