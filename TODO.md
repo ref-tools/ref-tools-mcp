@@ -39,6 +39,7 @@
 https://github.com/ref-tools/ref-tools-mcp/pull/15
 [x] dig in and manually debug to make sure it works good
 [x] add in pick docs
+[] fix up knowledge graph to be sure it works good
 [] chunk the right amounts
 [] mode that just returns name and allow loading thecontents as needed
 

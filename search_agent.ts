@@ -219,15 +219,69 @@ function buildCreateCypherForChunks(chunks: Chunk[]): { cypher: string } {
   }
   // relationships
   const rels: string[] = []
+  const existingRelKeys = new Set<string>()
   for (const c of chunks) {
     for (const r of c.relations || []) {
       const from = idToVar.get(c.id)
       const to = idToVar.get(r.targetId)
       if (!from || !to) continue
       const t = r.type.toUpperCase()
+      const key = `${t}|${from}|${to}`
+      if (existingRelKeys.has(key)) continue
+      existingRelKeys.add(key)
       rels.push(`(${from})-[:${t}]->(${to})`)
     }
   }
+
+  // Build name -> definition ids map for classes/functions/methods/interfaces
+  const definitionTypes = new Set<string>([
+    'function_declaration',
+    'method_definition',
+    'class_declaration',
+    'function_definition',
+    'class_definition',
+    'method_declaration',
+    'interface_declaration',
+    'class',
+    'method',
+    'function_definition',
+  ])
+  const nameToDefIds = new Map<string, Set<string>>()
+  for (const c of chunks) {
+    if (c.type !== 'file' && c.name && definitionTypes.has(c.type)) {
+      const set = nameToDefIds.get(c.name) || new Set<string>()
+      set.add(c.id)
+      nameToDefIds.set(c.name, set)
+    }
+  }
+
+  // For each chunk, tokenize content and create REFERENCES edges to any matching definitions by name
+  const identifierRegex = /[A-Za-z_][A-Za-z0-9_$]*/g
+  for (const c of chunks) {
+    const from = idToVar.get(c.id)
+    if (!from) continue
+    if (!c.content) continue
+    const seenTokens = new Set<string>()
+    let match: RegExpExecArray | null
+    while ((match = identifierRegex.exec(c.content)) !== null) {
+      const token = match[0]
+      if (token.length < 3) continue
+      if (seenTokens.has(token)) continue
+      seenTokens.add(token)
+      const targets = nameToDefIds.get(token)
+      if (!targets) continue
+      for (const targetId of targets) {
+        if (targetId === c.id) continue
+        const to = idToVar.get(targetId)
+        if (!to) continue
+        const key = `REFERENCES|${from}|${to}`
+        if (existingRelKeys.has(key)) continue
+        existingRelKeys.add(key)
+        rels.push(`(${from})-[:REFERENCES]->(${to})`)
+      }
+    }
+  }
+
   if (rels.length) {
     parts.push(', ')
     parts.push(rels.join(', '))
