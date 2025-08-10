@@ -96,6 +96,29 @@ export class SearchAgent {
     return this.db.search(prompt)
   }
 
+  // -------- MCP/Text helpers --------
+  formatChunkAsTextItem(chunk: Chunk): { type: 'text'; text: string } {
+    const range = chunk.type === 'file' ? '' : `${chunk.line}-${chunk.endLine}`
+    const header = `${chunk.filePath} ${range}`.trim()
+    return { type: 'text', text: `${header}\n---\n${chunk.content}` }
+  }
+
+  formatChunksAsTextItems(chunks: Chunk[]): { type: 'text'; text: string }[] {
+    return chunks.map((c) => this.formatChunkAsTextItem(c))
+  }
+
+  async searchQueryAsTextItems(query: string): Promise<{ type: 'text'; text: string }[]> {
+    const chunks = await this.db.search(query)
+    return this.formatChunksAsTextItems(chunks)
+  }
+
+  searchGraphAsTextItems(cypher: string): { type: 'text'; text: string }[] {
+    const rows = this.graph.run(cypher)
+    const all: Chunk[] = (this.db as any).listChunks()
+    const chunks = rowsToChunks(rows, all)
+    return this.formatChunksAsTextItems(chunks)
+  }
+
   getMerkleRoot(): string {
     return this.merkleRoot
   }
@@ -367,13 +390,7 @@ export function createSearchGraphTool(self: SearchAgent) {
     description: SEARCH_GRAPH_DESCRIPTION,
     parameters: z.object({ cypher: z.string() }),
     execute: async ({ cypher }) => {
-      const rows = (self as any)['graph'].run(cypher)
-      const all: Chunk[] = (self as any)['db'].listChunks()
-      const chunks = rowsToChunks(rows, all)
-      return chunks.map((chunk: Chunk) => ({
-        type: 'text',
-        text: `${chunk.filePath} ${chunk.type === 'file' ? '' : `${chunk.line}-${chunk.endLine}`}\n---\n${chunk.content}`,
-      }))
+      return self.searchGraphAsTextItems(cypher)
     },
   })
 }
@@ -383,11 +400,7 @@ export function createSearchQueryTool(self: SearchAgent) {
     description: SEARCH_QUERY_DESCRIPTION,
     parameters: z.object({ query: z.string() }),
     execute: async ({ query }) => {
-      const chunks = await (self as any)['db'].search(query)
-      return chunks.map((chunk: Chunk) => ({
-        type: 'text',
-        text: `${chunk.filePath} ${chunk.type === 'file' ? '' : `${chunk.line}-${chunk.endLine}`}\n---\n${chunk.content}`,
-      }))
+      return self.searchQueryAsTextItems(query)
     },
   })
 }
@@ -484,10 +497,7 @@ export async function runAgentWithStreaming(
     execute: async ({ chunkIds }) => {
       const all: Chunk[] = (self as any)['db'].listChunks()
       const selected = all.filter((c) => chunkIds.includes(c.id))
-      return selected.map((chunk) => ({
-        type: 'text',
-        text: `${chunk.filePath} ${chunk.type === 'file' ? '' : `${chunk.line}-${chunk.endLine}`}\n---\n${chunk.content}`,
-      }))
+      return self.formatChunksAsTextItems(selected)
     },
   })
 

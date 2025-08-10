@@ -854,6 +854,7 @@ class Parser {
     return { kind: 'Literal', value: ident }
   }
 
+  // @ts-ignore
   private parseValue(): any {
     if (this.t.peekString()) return this.t.readString()
     if (this.t.peekNumber()) return this.parseNumber()

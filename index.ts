@@ -22,12 +22,9 @@ import { randomUUID } from 'crypto'
 import { uiHelloTool, callUiHello } from './helloui.js'
 import { generateUiTool, callGenerateUi } from './genui.js'
 import { visualizeCodeTool, callVisualizeCode } from './visualize_code.js'
-import SearchAgent, {
-  createSearchGraphTool,
-  createSearchQueryTool,
-  SEARCH_GRAPH_DESCRIPTION,
-  SEARCH_QUERY_DESCRIPTION,
-} from './search_agent.js'
+import SearchAgent, { SEARCH_GRAPH_DESCRIPTION, SEARCH_QUERY_DESCRIPTION } from './search_agent.js'
+import { makeOpenAIAnnotator } from './openai_searchdb.js'
+import { pickChunksFilter } from './pickdocs.js'
 
 // Tool configuration based on client type
 type ToolConfig = {
@@ -53,12 +50,6 @@ const HTTP_PORT = parseInt(process.env.PORT || '8080', 10)
 let currentApiKey: string | undefined = undefined
 // Optional code search agent (gated by env)
 let codeSearchAgent: SearchAgent | undefined
-let codeSearchTools:
-  | {
-      searchQueryExecute: ((args: { query: string }) => Promise<{ type: 'text'; text: string }[]>) | null
-      searchGraphExecute: ((args: { cypher: string }) => Promise<{ type: 'text'; text: string }[]>) | null
-    }
-  | undefined
 
 // Session management for HTTP transport
 const transports: { [sessionId: string]: StreamableHTTPServerTransport } = {}
@@ -243,7 +234,7 @@ function createServerInstance(mcpClient: string = 'unknown', sessionId?: string)
     }
 
     if (request.params.name === 'search_code_text') {
-      if (!codeSearchAgent || !codeSearchTools?.searchQueryExecute) {
+      if (!codeSearchAgent) {
         return {
           content: [
             {
@@ -257,12 +248,12 @@ function createServerInstance(mcpClient: string = 'unknown', sessionId?: string)
       if (!input?.query) {
         throw new McpError(ErrorCode.InvalidParams, 'Missing required argument: query')
       }
-      const out = await codeSearchTools.searchQueryExecute({ query: input.query })
-      return { content: out }
+      const out = await codeSearchAgent.searchQueryAsTextItems(input.query)
+      return { content: out as any }
     }
 
     if (request.params.name === 'search_code_graph') {
-      if (!codeSearchAgent || !codeSearchTools?.searchGraphExecute) {
+      if (!codeSearchAgent) {
         return {
           content: [
             {
@@ -276,8 +267,8 @@ function createServerInstance(mcpClient: string = 'unknown', sessionId?: string)
       if (!input?.cypher) {
         throw new McpError(ErrorCode.InvalidParams, 'Missing required argument: cypher')
       }
-      const out = await codeSearchTools.searchGraphExecute({ cypher: input.cypher })
-      return { content: out }
+      const out = codeSearchAgent.searchGraphAsTextItems(input.cypher)
+      return { content: out as any }
     }
 
     if (request.params.name === toolConfig.readToolName) {
@@ -686,16 +677,11 @@ export default function () {
       codeSearchAgent = new SearchAgent(dir, {
         watch: true,
         openaiApiKey: openai,
+        annotator: openai ? makeOpenAIAnnotator({ apiKey: openai }) : undefined,
+        relevanceFilter: openai ? pickChunksFilter : undefined,
       })
       // Kick off initial ingest in background
       codeSearchAgent.ingest().catch((e) => console.error('SearchAgent ingest error:', e))
-      // Prepare reusable tool executors from ai tools
-      const graphTool = createSearchGraphTool(codeSearchAgent)
-      const queryTool = createSearchQueryTool(codeSearchAgent)
-      codeSearchTools = {
-        searchGraphExecute: graphTool.execute,
-        searchQueryExecute: queryTool.execute,
-      }
       console.error('Local code SearchAgent initialized for', dir)
     } else {
       console.error(
