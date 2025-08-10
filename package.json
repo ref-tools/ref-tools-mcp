@@ -16,6 +16,7 @@
     "searchdb:cli": "tsx cli_searchdb.ts",
     "bench:setup": "tsx cli_bench.ts setup",
     "bench:run": "tsx cli_bench.ts run",
+    "bench:run:small": "tsx cli_bench.ts run small",
     "bench:viz": "tsx cli_bench.ts viz",
     "pre-commit": "npm run check",
     "prepublishOnly": "npm run build"

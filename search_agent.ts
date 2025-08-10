@@ -411,12 +411,10 @@ export async function runAgentWithStreaming(
     onStream?.({ type: 'tool_result', name: 'search_query', output: chunks })
     if (mode === 'findContext') {
       onStream?.({ type: 'tool_call', name: 'finalize_context', input: { finalize: true } })
-      // In fallback, finalize to top 5 chunks
-      const selected = chunks.slice(0, 5)
-      onStream?.({ type: 'tool_result', name: 'finalize_context', output: selected })
-      const md = await buildAgentMarkdownFromChunks(query, selected, (self as any)['rootDir'])
+      onStream?.({ type: 'tool_result', name: 'finalize_context', output: chunks })
+      const md = await buildAgentMarkdownFromChunks(query, chunks, (self as any)['rootDir'])
       onStream?.({ type: 'final', markdown: md })
-      return { markdown: md, chunks: selected }
+      return { markdown: md, chunks: chunks }
     }
     // answer mode: stream a brief transcript-like text then final markdown
     onStream?.({ type: 'text_delta', text: 'Planning search...\n' })

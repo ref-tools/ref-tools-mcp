@@ -10,9 +10,9 @@ import { SearchDB } from './searchdb'
 import { makeOpenAIAnnotator } from './openai_searchdb'
 import { pickChunksFilter } from './pickdocs'
 
-type RepoSpec = { name: string; url: string }
+export type RepoSpec = { name: string; url: string }
 
-const REPOS: RepoSpec[] = [
+export const REPOS: RepoSpec[] = [
   { name: 'chalk', url: 'https://github.com/chalk/chalk.git' },
   { name: 'axios', url: 'https://github.com/axios/axios.git' },
   { name: 'date-fns', url: 'https://github.com/date-fns/date-fns.git' },
@@ -20,6 +20,28 @@ const REPOS: RepoSpec[] = [
   // Larger real-world app (~10k+ files) to stress test chunking and indexing
   { name: 'vscode', url: 'https://github.com/microsoft/vscode.git' },
 ]
+
+// Select which repos to use for a run. Supports:
+// - explicit modeArg of 'small' to only run 'chalk'
+// - BENCH_MODE=small env var (same behavior)
+// - BENCH_REPOS=comma,separated,names to choose a subset by name
+export function selectRepos(modeArg?: string): RepoSpec[] {
+  const isSmall = modeArg === 'small' || process.env.BENCH_MODE === 'small'
+  if (isSmall) return REPOS.filter((r) => r.name === 'chalk')
+
+  const envList = (process.env.BENCH_REPOS || '').trim()
+  if (envList) {
+    const names = new Set(
+      envList
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean),
+    )
+    const chosen = REPOS.filter((r) => names.has(r.name))
+    if (chosen.length > 0) return chosen
+  }
+  return REPOS
+}
 
 const BENCH_DIR = path.resolve(process.cwd(), 'bench')
 const RESULTS_DIR = path.join(BENCH_DIR, 'results')
@@ -239,7 +261,7 @@ function queriesForRepo(repo: string): string[] {
   }
 }
 
-async function benchSearchDB(repoName: string, chunks: Chunk[], iterations = 5) {
+async function benchSearchDB(repoName: string, chunks: Chunk[], iterations = 1) {
   const search = new SearchDB({
     annotator: makeOpenAIAnnotator({
       apiKey: process.env.OPENAI_API_KEY!,
@@ -249,9 +271,11 @@ async function benchSearchDB(repoName: string, chunks: Chunk[], iterations = 5) 
     relevanceFilter: pickChunksFilter,
   })
   const t0 = nowNs()
+  console.log(`Starting to build index.`)
   await search.addChunks(chunks)
   const t1 = nowNs()
   const indexTimeMs = msBetween(t0, t1)
+  console.log(`Index built in ${indexTimeMs.toFixed(1)} ms`)
 
   const queries: { [name: string]: QueryResult } = {}
   const qlist = queriesForRepo(repoName)
@@ -275,6 +299,7 @@ async function benchSearchDB(repoName: string, chunks: Chunk[], iterations = 5) 
     for (let i = 0; i < iterations; i++) {
       const s = nowNs()
       // eslint-disable-next-line no-await-in-loop
+      console.log(`Searching for ${meta.label}`)
       await search.search(meta.label)
       const e = nowNs()
       times.push(msBetween(s, e))
@@ -342,9 +367,10 @@ async function benchGraphDB(chunks: Chunk[], iterations = 5) {
 }
 
 async function cmdRun() {
-  const iterations = Number(process.env.BENCH_ITERS || '5')
+  const iterations = Number(process.env.BENCH_ITERS || '1')
   ensureDir(RESULTS_DIR)
-  const reposToUse = REPOS
+  const modeArg = process.argv[3]
+  const reposToUse = selectRepos(modeArg)
   const runId = `run-${Date.now()}`
   const startedAt = new Date().toISOString()
   const results: any = {
@@ -631,8 +657,8 @@ async function main() {
       await cmdViz()
       break
     default:
-      console.log('Usage: tsx cli_bench.ts <setup|run|viz>')
-      console.log('Env: BENCH_ITERS=5')
+      console.log('Usage: tsx cli_bench.ts <setup|run|viz> [small]')
+      console.log('Env: BENCH_ITERS=5, BENCH_MODE=small, BENCH_REPOS=chalk,axios')
   }
 }
 
