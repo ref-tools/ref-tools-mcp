@@ -58,9 +58,7 @@ export class GraphDB {
         console.error('Parse error:', err?.message || String(err), 'in statement:', trimmed)
         throw err
       }
-      console.log('ast', ast)
       lastResult = this.execute(ast)
-      console.log('lastResult', lastResult)
     }
     return lastResult
   }
