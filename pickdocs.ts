@@ -19,7 +19,7 @@ function chunkListToPrompt(chunks: AnnotatedChunk[]): string {
       const baseName = path.basename(c.filePath)
       const name = c.name ? ` ${c.name}` : ''
       const loc = `${c.line}-${c.endLine}`
-      return `${index}. ${baseName}${name} [${loc}]\n${c.description}`
+      return `${index}. ${c.filePath} ${baseName === name ? '' : name} [${loc}]\n${c.description}`
     })
     .join('\n\n')
 }
@@ -64,7 +64,7 @@ export async function pickChunks(
   const presented = inputChunks.slice(0, maxItems)
   const filesBlock = chunkListToPrompt(presented)
 
-  const system = `You are a senior software engineer. You are deciding which code chunks are most relevant to read to answer a prompt.\n\nYou will be provided a list of code chunks with file, optional symbol name, and line range plus a description.\n\nDo your best to be decerning and only pick the most relevant chunks.\n\n Return ONLY a JSON object of the form {"chunks": [indices...]}, where indices refer to the list provided. Do not include any extra text.`
+  const system = `You are a senior software engineer. You are deciding which code chunks are most relevant to read to answer a prompt.\n\nYou will be provided a list of code chunks with file, optional symbol name, and line range plus a description.\n\nYour goal is to find the single relevant chunk but if you're unsuer or multiple are relevant that's okay. If there are multiple relevant and they have overlapping line numbers, only return the larger section. (eg [2-4] and [1-10], only return [1-10])\n\n Return ONLY a JSON object of the form {"chunks": [indices...]}, where indices refer to the list provided. Do not include any extra text.`
 
   const user = `CHUNKS_TO_PICK_FROM:\n${filesBlock}\n\nPROMPT:\n${prompt}`
 
@@ -96,7 +96,7 @@ export async function pickChunks(
   const selected = indices.map((i) => presented[i]!).filter(Boolean)
 
   // Console diagnostics similar to pickDocs
-  // console.log(`CHUNKS_TO_PICK_FROM:\n${filesBlock}\n\nPICKED_CHUNKS:\n${indices.join(', ')}`)
+  console.log(`CHUNKS_TO_PICK_FROM:\n${filesBlock}\n\nPICKED_CHUNKS:\n${indices.join(', ')}`)
 
   return { chunks: selected, indices, usage: data.usage }
 }
