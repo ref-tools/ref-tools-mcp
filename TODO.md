@@ -46,21 +46,19 @@ https://github.com/ref-tools/ref-tools-mcp/pull/15
 [] should allow restarting search agent, reloading serialized data and compare merkel tree to data
 
 # connected mcp server
-[] require a REF_DIRECTORY and OPENAI_API_KEY env variables in config, otherwise don't setup these capabilites
-[] launch a SearchAgent in the directory
-[] tools search_code_text() (reuse searchQuery) and search_code_graph() (reuse searchGraph) for direct searches, have these just return 
+[x] require a REF_DIRECTORY and OPENAI_API_KEY env variables in config, otherwise don't setup these capabilites
+[x] launch a SearchAgent in the directory
+[x] tools search_code_text() (reuse searchQuery) and search_code_graph() (reuse searchGraph) for direct searches, have these just return 
 
 # visual results
 [x] Update SearchAgent to optionally be able to return a visual with mcp-ui 
-[] dump the graph to visual
-[] tool search_deep_dive() to find info about the repo that calls search agent 
-[] visualize_repo() tool
+[] visualize tool that will take a prompt + automaitcally dump the entire graph into context
 
 # see how much it can improve itself
 [x] generate a bench mark test for each searchdb, graphdb (save results to a file, have a ui for viewing) https://github.com/ref-tools/ref-tools-mcp/pull/16
 [x] add more larger repos
-[] graph should show average of all qieries.  
-[] improve the UI and make it more digest able across
+[x] graph should show average of all qieries.  
+[x] improve the UI and make it more digest able across
 [] optimize the shit out of in-memory systems
 - do this 3 times
 [] rewrite in rust with bindings (do on repeat)
