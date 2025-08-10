@@ -4,10 +4,10 @@ import { defaultAnnotator, type ChunkAnnotator, type RelevanceFilter } from './s
 
 type NativeModule = {
   SearchIndex: new () => {
-    add_doc(id: string, bm25_text: string, embedding: Float32Array): void
-    update_doc(id: string, bm25_text: string, embedding: Float32Array): void
-    remove_doc(id: string): void
-    union_candidates(query: string, query_vec: Float32Array, bm25_k: number, knn_k: number): string[]
+    addDoc(id: string, bm25_text: string, embedding: Float32Array): void
+    updateDoc(id: string, bm25_text: string, embedding: Float32Array): void
+    removeDoc(id: string): void
+    unionCandidates(query: string, query_vec: Float32Array, bm25_k: number, knn_k: number): string[]
   }
 }
 
@@ -64,7 +64,7 @@ export class RustSearchDB {
     const bm25Text = `${description}\n${chunk.content}`
     const emb = Float32Array.from(embedding.map((x) => (Number.isFinite(x) ? x : 0)))
     this.byId.set(chunk.id, { ...chunk, description, embedding })
-    this.native.add_doc(chunk.id, bm25Text, emb)
+    this.native.addDoc(chunk.id, bm25Text, emb)
   }
 
   async addChunks(chunks: Chunk[]): Promise<void> {
@@ -81,13 +81,13 @@ export class RustSearchDB {
     const bm25Text = `${description}\n${chunk.content}`
     const emb = Float32Array.from(embedding.map((x) => (Number.isFinite(x) ? x : 0)))
     this.byId.set(chunk.id, { ...chunk, description, embedding })
-    this.native.update_doc(chunk.id, bm25Text, emb)
+    this.native.updateDoc(chunk.id, bm25Text, emb)
   }
 
   removeChunk(id: string): void {
     if (!this.byId.has(id)) return
     this.byId.delete(id)
-    this.native.remove_doc(id)
+    this.native.removeDoc(id)
   }
 
   async search(query: string, options: SearchOptions = {}): Promise<AnnotatedChunk[]> {
@@ -96,10 +96,8 @@ export class RustSearchDB {
     const annotator = this.opts.annotator || defaultAnnotator
     const qVecArr = await annotator.embed(query)
     const qVec = Float32Array.from(qVecArr.map((x) => (Number.isFinite(x) ? x : 0)))
-    const ids = this.native.union_candidates(query, qVec, bm25K, knnK)
-    const items = ids
-      .map((id) => this.byId.get(id))
-      .filter((c): c is AnnotatedChunk => !!c)
+    const ids = this.native.unionCandidates(query, qVec, bm25K, knnK)
+    const items = ids.map((id) => this.byId.get(id)).filter((c): c is AnnotatedChunk => !!c)
 
     const filter = this.opts.relevanceFilter
     if (filter) {
