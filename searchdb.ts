@@ -16,21 +16,22 @@ export type SearchOptions = {
 }
 
 function tokenize(text: string): string[] {
+  // Lowercase once to avoid per-token lowercase work
+  const s = text.toLowerCase()
   const out: string[] = []
-  const n = text.length
+  const n = s.length
   let start = -1
   for (let i = 0; i < n; i++) {
-    let c = text.charCodeAt(i)
-    if (c >= 65 && c <= 90) c += 32 // toLowerCase for ASCII letters
+    const c = s.charCodeAt(i)
     const isWord = (c >= 97 && c <= 122) || (c >= 48 && c <= 57) || c === 95
     if (isWord) {
       if (start === -1) start = i
     } else if (start !== -1) {
-      out.push(text.slice(start, i).toLowerCase())
+      out.push(s.slice(start, i))
       start = -1
     }
   }
-  if (start !== -1) out.push(text.slice(start).toLowerCase())
+  if (start !== -1) out.push(s.slice(start))
   return out
 }
 
@@ -53,6 +54,7 @@ function cosine(a: number[], b: number[]): number {
 class BM25Index {
   private postings = new Map<string, Map<string, number>>() // term -> (docId -> tf)
   private docLen = new Map<string, number>()
+  private docTerms = new Map<string, string[]>() // docId -> unique terms present
   private totalLen = 0
   private docs = new Set<string>()
 
@@ -67,6 +69,8 @@ class BM25Index {
     if (len === 0) return
     const tfMap = new Map<string, number>()
     for (const t of terms) tfMap.set(t, (tfMap.get(t) || 0) + 1)
+    const uniq: string[] = []
+    for (const term of tfMap.keys()) uniq.push(term)
     for (const [term, tf] of tfMap) {
       let post = this.postings.get(term)
       if (!post) this.postings.set(term, (post = new Map()))
@@ -74,15 +78,28 @@ class BM25Index {
     }
     this.docLen.set(docId, len)
     this.totalLen += len
+    this.docTerms.set(docId, uniq)
     this.docs.add(docId)
   }
 
   remove(docId: string) {
     if (!this.docs.has(docId)) return
-    for (const [, post] of this.postings) post.delete(docId)
+    const terms = this.docTerms.get(docId)
+    if (terms) {
+      for (const term of terms) {
+        const post = this.postings.get(term)
+        if (!post) continue
+        post.delete(docId)
+        if (post.size === 0) this.postings.delete(term)
+      }
+    } else {
+      // Fallback: scan all postings (shouldn't happen)
+      for (const [, post] of this.postings) post.delete(docId)
+    }
     const len = this.docLen.get(docId) || 0
     this.totalLen -= len
     this.docLen.delete(docId)
+    this.docTerms.delete(docId)
     this.docs.delete(docId)
   }
 
@@ -99,15 +116,22 @@ class BM25Index {
     const N = Math.max(1, this.docs.size)
     const avgdl = this.totalLen > 0 ? this.totalLen / N : 0.0001
     const scores = new Map<string, number>()
+    const denomBaseCache = new Map<string, number>()
     for (const term of qTerms) {
       const post = this.postings.get(term)
       if (!post) continue
       const df = post.size
       const idf = Math.log(1 + (N - df + 0.5) / (df + 0.5))
+      const mult = idf * (this.k1 + 1)
       for (const [docId, tf] of post) {
-        const dl = this.docLen.get(docId) || 0
-        const denom = tf + this.k1 * (1 - this.b + (this.b * dl) / avgdl)
-        const s = idf * ((tf * (this.k1 + 1)) / (denom || 1e-9))
+        let base = denomBaseCache.get(docId)
+        if (base === undefined) {
+          const dl = this.docLen.get(docId) || 0
+          base = this.k1 * (1 - this.b + (this.b * dl) / avgdl)
+          denomBaseCache.set(docId, base)
+        }
+        const denom = tf + base
+        const s = mult * (tf / (denom || 1e-9))
         scores.set(docId, (scores.get(docId) || 0) + s)
       }
     }
@@ -177,6 +201,7 @@ class VectorIndex {
   private data = new Float32Array(0)
   private ids: string[] = []
   private idToRow = new Map<string, number>()
+  private qbuf: Float32Array | null = null
 
   size(): number {
     return this.ids.length
@@ -252,7 +277,8 @@ class VectorIndex {
     if (k <= 0 || this.ids.length === 0) return []
     // build normalized query
     const d = this.dim
-    const q = new Float32Array(d)
+    if (!this.qbuf || this.qbuf.length !== d) this.qbuf = new Float32Array(d)
+    const q = this.qbuf
     let sumsq = 0
     for (let i = 0; i < d; i++) {
       const v = queryVec[i] ?? 0
@@ -309,7 +335,16 @@ class VectorIndex {
     for (let row = 0; row < rows; row++) {
       const off = row * d
       let dot = 0
-      for (let i = 0; i < d; i++) dot += data[off + i] * q[i]
+      let i = 0
+      const limit = d - (d % 4)
+      // unroll by 4
+      for (; i < limit; i += 4) {
+        dot += data[off + i] * q[i]
+        dot += data[off + i + 1] * q[i + 1]
+        dot += data[off + i + 2] * q[i + 2]
+        dot += data[off + i + 3] * q[i + 3]
+      }
+      for (; i < d; i++) dot += data[off + i] * q[i]
       if (heapIdx.length < k) push(row, dot)
       else if (dot > heapS[0]) {
         pop()
