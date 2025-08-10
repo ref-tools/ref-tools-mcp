@@ -261,6 +261,8 @@ function buildCreateCypherForChunks(chunks: Chunk[]): { cypher: string } {
     const from = idToVar.get(c.id)
     if (!from) continue
     if (!c.content) continue
+    // Skip file-level chunks to avoid noisy, file-wide token matches creating spurious edges
+    if (c.type === 'file') continue
     const seenTokens = new Set<string>()
     let match: RegExpExecArray | null
     while ((match = identifierRegex.exec(c.content)) !== null) {
@@ -269,16 +271,17 @@ function buildCreateCypherForChunks(chunks: Chunk[]): { cypher: string } {
       if (seenTokens.has(token)) continue
       seenTokens.add(token)
       const targets = nameToDefIds.get(token)
-      if (!targets) continue
-      for (const targetId of targets) {
-        if (targetId === c.id) continue
-        const to = idToVar.get(targetId)
-        if (!to) continue
-        const key = `REFERENCES|${from}|${to}`
-        if (existingRelKeys.has(key)) continue
-        existingRelKeys.add(key)
-        rels.push(`(${from})-[:REFERENCES]->(${to})`)
-      }
+      // Only create a REFERENCES edge when the identifier maps to a single, unique definition.
+      // This avoids noisy edges for common names like "run", "init", etc. across many files.
+      if (!targets || targets.size !== 1) continue
+      const targetId = Array.from(targets)[0]!
+      if (targetId === c.id) continue
+      const to = idToVar.get(targetId)
+      if (!to) continue
+      const key = `REFERENCES|${from}|${to}`
+      if (existingRelKeys.has(key)) continue
+      existingRelKeys.add(key)
+      rels.push(`(${from})-[:REFERENCES]->(${to})`)
     }
   }
 

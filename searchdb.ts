@@ -134,7 +134,11 @@ export class SearchDB {
   }
 
   async addChunks(chunks: Chunk[]): Promise<void> {
-    await Promise.all(chunks.map((c) => this.addChunk(c)))
+    const batchSize = 10
+    for (let i = 0; i < chunks.length; i += batchSize) {
+      const batch = chunks.slice(i, i + batchSize)
+      await Promise.all(batch.map((c) => this.addChunk(c)))
+    }
   }
 
   async updateChunk(chunk: Chunk): Promise<void> {

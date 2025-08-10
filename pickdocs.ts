@@ -64,7 +64,7 @@ export async function pickChunks(
   const presented = inputChunks.slice(0, maxItems)
   const filesBlock = chunkListToPrompt(presented)
 
-  const system = `You are a senior software engineer. You are deciding which code chunks are most relevant to read to answer a prompt.\n\nYou will be provided a list of code chunks with file, optional symbol name, and line range plus a short snippet.\n\nPick ALL chunks that might be relevant. Return ONLY a JSON object of the form {"chunks": [indices...]}, where indices refer to the list provided. Do not include any extra text.`
+  const system = `You are a senior software engineer. You are deciding which code chunks are most relevant to read to answer a prompt.\n\nYou will be provided a list of code chunks with file, optional symbol name, and line range plus a description.\n\nDo your best to be decerning and only pick the most relevant chunks.\n\n Return ONLY a JSON object of the form {"chunks": [indices...]}, where indices refer to the list provided. Do not include any extra text.`
 
   const user = `CHUNKS_TO_PICK_FROM:\n${filesBlock}\n\nPROMPT:\n${prompt}`
 
@@ -96,7 +96,7 @@ export async function pickChunks(
   const selected = indices.map((i) => presented[i]!).filter(Boolean)
 
   // Console diagnostics similar to pickDocs
-  console.log(`CHUNKS_TO_PICK_FROM:\n${filesBlock}\n\nPICKED_CHUNKS:\n${indices.join(', ')}`)
+  // console.log(`CHUNKS_TO_PICK_FROM:\n${filesBlock}\n\nPICKED_CHUNKS:\n${indices.join(', ')}`)
 
   return { chunks: selected, indices, usage: data.usage }
 }

@@ -7,6 +7,8 @@ import http from 'node:http'
 import { chunkCodebase, type Chunk } from './chunker'
 import { GraphDB } from './graphdb'
 import { SearchDB } from './searchdb'
+import { makeOpenAIAnnotator } from './openai_searchdb'
+import { pickChunksFilter } from './pickdocs'
 
 type RepoSpec = { name: string; url: string }
 
@@ -238,7 +240,14 @@ function queriesForRepo(repo: string): string[] {
 }
 
 async function benchSearchDB(repoName: string, chunks: Chunk[], iterations = 5) {
-  const search = new SearchDB()
+  const search = new SearchDB({
+    annotator: makeOpenAIAnnotator({
+      apiKey: process.env.OPENAI_API_KEY!,
+      labelModel: 'gpt-5-nano',
+      embedModel: 'text-embedding-3-small',
+    }),
+    relevanceFilter: pickChunksFilter,
+  })
   const t0 = nowNs()
   await search.addChunks(chunks)
   const t1 = nowNs()

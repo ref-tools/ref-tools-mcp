@@ -39,12 +39,14 @@
 https://github.com/ref-tools/ref-tools-mcp/pull/15
 [x] dig in and manually debug to make sure it works good
 [x] add in pick docs
-[] fix up knowledge graph to be sure it works good
+[x] fix up knowledge graph to be sure it works good
+[] improve pick
 [] chunk the right amounts
-[] mode that just returns name and allow loading thecontents as needed
+[] update graphdb to return Chunks 
+[] add read tool and have search agent return 
 
 # persistence for different dbs
-[] should allow restarting search agent and compare merkel tree to data
+[] should allow restarting search agent, reloading serialized data and compare merkel tree to data
 
 # connected mcp server
 [] require a directory and openai env variables in config, otherwise don't setup these capabilites
@@ -53,7 +55,7 @@ https://github.com/ref-tools/ref-tools-mcp/pull/15
 [] tools search_code_text() and search_code_graph() for direct searches 
 
 # visual results
-x] Update SearchAgent to optionally be able to return a visual with mcp-ui 
+[x] Update SearchAgent to optionally be able to return a visual with mcp-ui 
 
 
 # see how much it can improve itself

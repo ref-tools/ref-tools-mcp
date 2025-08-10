@@ -27,4 +27,37 @@ describe('buildCreateCypherForChunks REFERENCES edges', () => {
     )
     expect(rows[0]?.count || 0).toBeGreaterThan(0)
   })
+
+  it('does not create spurious REFERENCES when a chunk references its own symbol name present in another file', async () => {
+    const dir = tmpDir()
+    const fa = path.join(dir, 'a.ts')
+    const fb = path.join(dir, 'b.ts')
+    // a.ts defines a unique function name 'run'
+    fs.writeFileSync(fa, `export function run(){ return 1 }\n`)
+    // b.ts defines a class with a method also named 'run' but does not use a.run
+    fs.writeFileSync(
+      fb,
+      [
+        `export class GraphDB {`,
+        `  run(){`,
+        `    // method body that does not reference a.run`,
+        `    return 2`,
+        `  }`,
+        `}`,
+        ``,
+      ].join('\n'),
+    )
+
+    const agent = new SearchAgent(dir, { languages: ['typescript'] })
+    await agent.ingest()
+
+    // No REFERENCES should exist from any chunk in b.ts to the 'run' definition in a.ts
+    const rows = agent.search_graph(
+      `MATCH (b:Chunk { filePath: '${fb.replace(/\\/g, '\\\\')}' })-[:REFERENCES]->(a:Chunk { name: 'run', filePath: '${fa.replace(
+        /\\\\/g,
+        '\\\\\\\\',
+      )}' }) RETURN count(*) AS count`,
+    )
+    expect(rows[0]?.count || 0).toBe(0)
+  })
 })

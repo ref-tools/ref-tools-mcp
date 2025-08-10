@@ -123,7 +123,6 @@ export class GraphDB {
         if (ast.returnClause?.orderBy && ast.returnClause.orderBy.length > 0)
           rows = sortRows(rows, ast.returnClause.orderBy)
         if (ast.limit != null) rows = rows.slice(0, ast.limit)
-        console.log('rows', rows)
         return rows
       }
       default:
