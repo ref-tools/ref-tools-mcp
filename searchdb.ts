@@ -153,8 +153,8 @@ export class SearchDB {
   }
 
   async search(query: string, options: SearchOptions = {}): Promise<AnnotatedChunk[]> {
-    const knnK = options.knnK ?? 5
-    const bm25K = options.bm25K ?? 5
+    const knnK = options.knnK ?? 10
+    const bm25K = options.bm25K ?? 10
 
     // BM25 candidates
     const bm25Scores = this.bm25.score(query)
