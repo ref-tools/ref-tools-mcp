@@ -1,8 +1,8 @@
 import path from 'node:path'
 import crypto from 'node:crypto'
-import { type Chunk } from './chunker'
+import { type AnnotatedChunk, type Chunk } from './chunker'
 
-export type RelevanceFilter = (query: string, items: Chunk[]) => Promise<Chunk[]>
+export type RelevanceFilter = (query: string, items: AnnotatedChunk[]) => Promise<AnnotatedChunk[]>
 
 export type Annotation = { description: string; embedding: number[] }
 export interface ChunkAnnotator {
@@ -45,7 +45,10 @@ class BM25Index {
   private totalLen = 0
   private docs = new Set<string>()
 
-  constructor(private k1 = 1.5, private b = 0.75) {}
+  constructor(
+    private k1 = 1.5,
+    private b = 0.75,
+  ) {}
 
   add(docId: string, text: string) {
     const terms = tokenize(text)
@@ -99,7 +102,7 @@ class BM25Index {
 }
 
 export class SearchDB {
-  private byId = new Map<string, { chunk: Chunk; description: string; embedding: number[] }>()
+  private byId = new Map<string, AnnotatedChunk>()
   private bm25 = new BM25Index()
 
   constructor(
@@ -112,12 +115,12 @@ export class SearchDB {
   }
 
   // CRUD
-  getChunk(id: string): Chunk | undefined {
-    return this.byId.get(id)?.chunk
+  getChunk(id: string): AnnotatedChunk | undefined {
+    return this.byId.get(id)
   }
 
-  listChunks(): Chunk[] {
-    return Array.from(this.byId.values()).map((e) => e.chunk)
+  listChunks(): AnnotatedChunk[] {
+    return Array.from(this.byId.values())
   }
 
   async addChunk(chunk: Chunk): Promise<void> {
@@ -125,7 +128,7 @@ export class SearchDB {
     const { description, embedding } = await annotator.labelAndEmbed(chunk)
 
     // Store and update BM25
-    this.byId.set(chunk.id, { chunk, description, embedding })
+    this.byId.set(chunk.id, { ...chunk, description, embedding })
     const bm25Text = `${description}\n${chunk.content}`
     this.bm25.add(chunk.id, bm25Text)
   }
@@ -145,7 +148,7 @@ export class SearchDB {
     this.bm25.remove(id)
   }
 
-  async search(query: string, options: SearchOptions = {}): Promise<Chunk[]> {
+  async search(query: string, options: SearchOptions = {}): Promise<AnnotatedChunk[]> {
     const knnK = options.knnK ?? 5
     const bm25K = options.bm25K ?? 5
 
@@ -169,9 +172,7 @@ export class SearchDB {
     const uniqueIds = Array.from(new Set([...bm25Candidates, ...knnCandidates]))
 
     // Candidate chunks
-    const items = uniqueIds
-      .map((id) => this.byId.get(id)?.chunk)
-      .filter((c): c is Chunk => !!c)
+    const items = uniqueIds.map((id) => this.byId.get(id)).filter((c): c is AnnotatedChunk => !!c)
 
     // Final relevance filter over chunks if provided
     const filter = this.opts.relevanceFilter

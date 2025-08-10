@@ -5,8 +5,9 @@
 [x] try having gpt5 generate some ui
 [x] gpt5 generate a d3js solar system
 [x] try gpt5 generating
-[] build and run goose from source https://github.com/block/goose/blob/main/CONTRIBUTING.md
-[] get a higher ui
+[x] build and run goose from source https://github.com/block/goose/blob/main/CONTRIBUTING.md
+[x] get a higher ui
+- local build with grow heigh button works
 
 # knowledge graph
 [x] gpt5 build a in-memory graph db that supports cypher https://github.com/ref-tools/ref-tools-mcp/pull/12
@@ -26,6 +27,8 @@
 - storage of hash->array<node> - node should be able to use this to lookup in graphdb
 [x] build this https://github.com/ref-tools/ref-tools-mcp/pull/14
 
+
+
 # connected cli
 [x] SearchAgent(directory)
   - ingests a directory to chunks, embeds, creates graph deb
@@ -34,6 +37,9 @@
 [x] searcher has a watcher
 [x] merkle tree for updating as files update
 https://github.com/ref-tools/ref-tools-mcp/pull/15
+[x] dig in and manually debug to make sure it works good
+[] add in pick docs
+[] mode that just returns name and allow loading thecontents as needed
 
 # persistence for different dbs
 [] should allow restarting search agent and compare merkel tree to data
@@ -41,7 +47,8 @@ https://github.com/ref-tools/ref-tools-mcp/pull/15
 # connected mcp server
 [] require a directory and openai env variables in config, otherwise don't setup these capabilites
 [] launch a SearchAgent in the directory
-[] tool search_code() to find info about the repo that calls search agent
+[] tool search_deep_dive() to find info about the repo that calls search agent
+[] tools search_code_text() and search_code_graph() for direct searches
 
 # visual results
 [x] Update SearchAgent to optionally be able to return a visual with mcp-ui https://github.com/ref-tools/ref-tools-mcp/pull/16

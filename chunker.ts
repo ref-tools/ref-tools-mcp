@@ -8,6 +8,7 @@ import Java from 'tree-sitter-java'
 import Ruby from 'tree-sitter-ruby'
 import C from 'tree-sitter-c'
 import TS from 'tree-sitter-typescript'
+import type { Annotation } from './searchdb'
 
 export type Relation = {
   type: 'contains' | 'defines' | 'references'
@@ -27,6 +28,8 @@ export type Chunk = {
   parentId?: string
   relations: Relation[]
 }
+
+export type AnnotatedChunk = Chunk & Annotation
 
 export type ChunkerOptions = {
   /**

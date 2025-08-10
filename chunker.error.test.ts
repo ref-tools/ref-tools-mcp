@@ -45,8 +45,8 @@ describe('chunker error handling', () => {
     expect(chunks).toBeTruthy()
     // Only the file chunk should be present
     expect(chunks.length).toBe(1)
-    expect(chunks[0].type).toBe('file')
-    expect(chunks[0].filePath).toContain('bad.js')
+    expect(chunks[0]!.type).toBe('file')
+    expect(chunks[0]!.filePath).toContain('bad.js')
   })
 
   it('continues chunking codebase when one file parse fails', async () => {

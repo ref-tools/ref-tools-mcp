@@ -1,7 +1,11 @@
 #!/usr/bin/env node
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
-import SearchAgent, { type QueryResult, type AgentStreamEvent, runAgentWithStreaming } from './search_agent'
+import SearchAgent, {
+  type QueryResult,
+  type AgentStreamEvent,
+  runAgentWithStreaming,
+} from './search_agent'
 
 function usage() {
   return [
@@ -77,24 +81,33 @@ async function run() {
   }
   const languages = (args.languages as string | undefined)?.split(',').map((s) => s.trim())
   const useAgent = !!args.agent
-  const agentMode = ((args.mode as string | undefined) === 'findContext' ? 'findContext' : 'answer') as 'findContext' | 'answer'
+  const agentMode = (
+    (args.mode as string | undefined) === 'findContext' ? 'findContext' : 'answer'
+  ) as 'findContext' | 'answer'
   const model = (args.model as string | undefined) || 'gpt-5'
   const apiKey = (args['api-key'] as string | undefined) || process.env.OPENAI_API_KEY
 
   const s = spinner('Indexing repository...')
-  const agent = new SearchAgent(root, { languages, useOpenAI: useAgent, agentModel: model, openaiApiKey: apiKey || undefined })
+  const agent = new SearchAgent(root, {
+    languages,
+    useOpenAI: useAgent,
+    agentModel: model,
+    openaiApiKey: apiKey || undefined,
+  })
   await agent.ingest()
   s.stop('Index ready.')
 
   if (useAgent) {
-    // Stream live agent output
-    console.log('Agent: starting interactive search...')
+    console.log(`Agent starting. mode=${agentMode} query='${query}'`)
     const render = (e: AgentStreamEvent) => {
       if (e.type === 'tool_call') {
         const params = e.name === 'search_graph' ? e.input?.cypher : e.input?.query
         console.log(`→ Tool ${e.name}(${JSON.stringify(params)})`)
       } else if (e.type === 'tool_result') {
-        const summary = e.name === 'search_graph' ? `${(e.output as any[]).length} row(s)` : `${(e.output as any[]).length} chunk(s)`
+        const summary =
+          e.name === 'search_graph'
+            ? `${(e.output as any[]).length} row(s)`
+            : `${(e.output as any[]).length} chunk(s)`
         console.log(`✓ Result from ${e.name}: ${summary}`)
       } else if (e.type === 'text_delta') {
         process.stdout.write(e.text)

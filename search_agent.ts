@@ -4,6 +4,7 @@ import crypto from 'node:crypto'
 import { chunkCodebase, chunkFile, type Chunk } from './chunker'
 import { GraphDB } from './graphdb'
 import { SearchDB, type ChunkAnnotator, type RelevanceFilter } from './searchdb'
+import { pickChunks } from './pickdocs'
 import { streamText, tool as aiTool } from 'ai'
 import { createOpenAI } from '@ai-sdk/openai'
 import { z } from 'zod'
@@ -19,9 +20,7 @@ export type SearchAgentOptions = {
   agentModel?: string // default: gpt-5
 }
 
-export type QueryResult =
-  | { kind: 'graph'; rows: any[] }
-  | { kind: 'search'; chunks: Chunk[] }
+export type QueryResult = { kind: 'graph'; rows: any[] } | { kind: 'search'; chunks: Chunk[] }
 
 export type AgentMode = 'findContext' | 'answer'
 
@@ -39,10 +38,28 @@ export class SearchAgent {
   private merkleRoot = ''
   private watcherTimer?: NodeJS.Timeout
 
-  constructor(private rootDir: string, private opts: SearchAgentOptions = {}) {
+  constructor(
+    private rootDir: string,
+    private opts: SearchAgentOptions = {},
+  ) {
+    // If a relevance filter is provided explicitly, use it. Otherwise, if an OpenAI API key
+    // is available, wire up the pickChunks-based filter using gpt-5-nano.
+    const apiKey = opts.openaiApiKey || process.env.OPENAI_API_KEY
+    const effectiveFilter: RelevanceFilter | undefined =
+      opts.relevanceFilter ||
+      (apiKey
+        ? async (query, items) => {
+            const { chunks } = await pickChunks(query, items, {
+              apiKey,
+              model: 'gpt-5-nano',
+            })
+            return chunks
+          }
+        : undefined)
+
     this.db = new SearchDB({
       annotator: opts.annotator,
-      relevanceFilter: opts.relevanceFilter,
+      relevanceFilter: effectiveFilter,
     })
   }
 
@@ -180,7 +197,6 @@ export class SearchAgent {
     this.rebuildGraphFromChunks()
     this.merkleRoot = merkleRoot(Array.from(this.merkleLeaves.entries()))
   }
-
 }
 
 // ------- Builders -------
@@ -280,7 +296,6 @@ function walkDirSimple(root: string): string[] {
 
 export default SearchAgent
 
-
 // -------- Agent Streaming Types and Runner --------
 export type AgentStreamEvent =
   | { type: 'status'; message: string }
@@ -296,7 +311,11 @@ export interface AgentRunResult {
   transcript?: string
 }
 
-export async function buildAgentMarkdownFromChunks(query: string, chunks: Chunk[], rootDir: string): Promise<string> {
+export async function buildAgentMarkdownFromChunks(
+  query: string,
+  chunks: Chunk[],
+  rootDir: string,
+): Promise<string> {
   const lines: string[] = []
   lines.push(`# Search Results`)
   lines.push('')
@@ -367,20 +386,22 @@ export async function runAgentWithStreaming(
     description: 'Run a Cypher query on the code graph and return rows.',
     parameters: z.object({ cypher: z.string() }),
     execute: async ({ cypher }) => {
-      onStream?.({ type: 'tool_call', name: 'search_graph', input: { cypher } })
-      const rows = (self as any)['graph'].run(cypher)
-      onStream?.({ type: 'tool_result', name: 'search_graph', output: rows })
-      return rows
+      const rows = self['graph'].run(cypher)
+      return rows.map((row: any) => ({
+        type: 'text',
+        text: JSON.stringify(row),
+      }))
     },
   })
   const searchQuery = aiTool({
     description: 'Search the codebase for relevant chunks to a natural language query.',
     parameters: z.object({ query: z.string() }),
     execute: async ({ query }) => {
-      onStream?.({ type: 'tool_call', name: 'search_query', input: { query } })
-      const chunks = await (self as any)['db'].search(query)
-      onStream?.({ type: 'tool_result', name: 'search_query', output: chunks })
-      return chunks
+      const chunks = await self['db'].search(query)
+      return chunks.map((chunk: Chunk) => ({
+        type: 'text',
+        text: `${chunk.filePath} ${chunk.type === 'file' ? '' : `${chunk.line}-${chunk.endLine}`}\n---\n${chunk.content}`,
+      }))
     },
   })
 
@@ -391,20 +412,34 @@ export async function runAgentWithStreaming(
     execute: async ({ chunkIds }) => {
       const all: Chunk[] = (self as any)['db'].listChunks()
       const selected = all.filter((c) => chunkIds.includes(c.id))
-      onStream?.({ type: 'tool_call', name: 'search_query', input: { finalize: true, chunkIds } })
-      onStream?.({ type: 'tool_result', name: 'search_query', output: selected })
-      return selected
+      return selected.map((chunk) => ({
+        type: 'text',
+        text: `${chunk.filePath} ${chunk.type === 'file' ? '' : `${chunk.line}-${chunk.endLine}`}\n---\n${chunk.content}`,
+      }))
     },
   })
 
-  const result = await streamText({
+  const result = streamText({
     model: openai(modelName),
     system:
-      (mode === 'findContext'
+      mode === 'findContext'
         ? 'You are a repository search agent. Use search tools to find relevant code. When ready, call finalize_context with a minimal set of chunkIds. Do not include unnecessary chunks.'
-        : 'You are a helpful repository research agent. Call tools as needed and narrate your reasoning. Provide a concise markdown summary at the end.'),
-    messages: [{ role: 'user', content: query }],
-    tools: mode === 'findContext' ? { search_graph: searchGraph, search_query: searchQuery, finalize_context: finalizeContext } : { search_graph: searchGraph, search_query: searchQuery },
+        : 'You are a helpful repository research agent. Call tools as needed and narrate your reasoning. Provide a concise markdown summary at the end.',
+    messages: [
+      {
+        role: 'user',
+        content: `Look through the codebase to find relevant information and answer the following query:\n${query}`,
+      },
+    ],
+    tools:
+      mode === 'findContext'
+        ? {
+            search_graph: searchGraph,
+            search_query: searchQuery,
+            finalize_context: finalizeContext,
+          }
+        : { search_graph: searchGraph, search_query: searchQuery },
+    maxSteps: 10,
   })
 
   let finalText = ''
@@ -425,15 +460,22 @@ export async function runAgentWithStreaming(
     }
   }
   onStream?.({ type: 'text_complete', text: finalText })
-  const markdown = finalText || (await buildAgentMarkdownFromChunks(query, [], (self as any)['rootDir']))
+  const markdown =
+    finalText || (await buildAgentMarkdownFromChunks(query, [], (self as any)['rootDir']))
   onStream?.({ type: 'final', markdown })
   // Note: without introspecting the tool results thread, we cannot programmatically pluck finalized chunks here.
   // Callers should process tool_result events for finalize_context to capture selected chunks.
   return { markdown, transcript: finalText }
 }
 
-export interface RunAgentOptions { onStream?: (e: AgentStreamEvent) => void }
-export async function runAgent(this: SearchAgent, query: string, opts?: RunAgentOptions): Promise<AgentRunResult> {
+export interface RunAgentOptions {
+  onStream?: (e: AgentStreamEvent) => void
+}
+export async function runAgent(
+  this: SearchAgent,
+  query: string,
+  opts?: RunAgentOptions,
+): Promise<AgentRunResult> {
   return runAgentWithStreaming(this, query, opts?.onStream)
 }
 
