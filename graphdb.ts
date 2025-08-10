@@ -189,7 +189,7 @@ export class GraphDB {
       const results: Binding[] = []
       for (const binding of inputBindings) {
         for (const node of this.nodes) {
-          if (!matchNodeLiteral(node, pattern)) continue
+          if (!matchNodeLiteral(node, pattern, binding)) continue
           if (pattern.variable && binding[pattern.variable] && binding[pattern.variable] !== node)
             continue
           const newBinding = { ...binding }
@@ -203,11 +203,11 @@ export class GraphDB {
       for (const binding of inputBindings) {
         for (const rel of this.rels) {
           if (pattern.relType && pattern.relType !== rel.type) continue
-          if (!propsMatch(rel.properties, pattern.relProps)) continue
+          if (!propsMatch(rel.properties, pattern.relProps, binding)) continue
           const fromNode = this.getNodeById(rel.from)!
           const toNode = this.getNodeById(rel.to)!
-          if (!matchNodeLiteral(fromNode, pattern.left)) continue
-          if (!matchNodeLiteral(toNode, pattern.right)) continue
+          if (!matchNodeLiteral(fromNode, pattern.left, binding)) continue
+          if (!matchNodeLiteral(toNode, pattern.right, binding)) continue
           // Respect existing bindings
           if (
             pattern.left.variable &&
@@ -322,20 +322,29 @@ function isNode(x: any): x is Node {
   return x && typeof x === 'object' && 'labels' in x && 'properties' in x && 'id' in x
 }
 
-function matchNodeLiteral(node: Node, pat: NodePattern): boolean {
+function matchNodeLiteral(node: Node, pat: NodePattern, binding: Binding): boolean {
   // Labels
   for (const lbl of pat.labels) {
     if (!node.labels.has(lbl)) return false
   }
-  return propsMatch(node.properties, pat.props)
+  return propsMatch(node.properties, pat.props, binding)
 }
 
-function propsMatch(obj: Properties, required: Properties): boolean {
+function propsMatch(obj: Properties, required: Properties, binding: Binding): boolean {
   for (const k of Object.keys(required)) {
-    const v = required[k]
+    const v = resolveRequiredValue(required[k], binding)
     if (!deepEquals(obj[k], v)) return false
   }
   return true
+}
+
+function resolveRequiredValue(v: any, binding: Binding): any {
+  // Support property reference values inside inline property maps, e.g. { filePath: u.filePath }
+  if (v && typeof v === 'object' && v.kind === 'PropRef') {
+    const obj = binding[v.variable]
+    return obj?.properties?.[v.property]
+  }
+  return v
 }
 
 function deepEquals(a: any, b: any): boolean {
@@ -562,13 +571,40 @@ class Parser {
       while (true) {
         const key = this.t.readIdent()
         this.t.expectSymbol(':')
-        obj[key] = this.parseValue()
+        obj[key] = this.parsePropValue()
         if (this.t.peekSymbol('}')) break
         this.t.expectSymbol(',')
       }
     }
     this.t.expectSymbol('}')
     return obj
+  }
+
+  // Parse a literal value or a property reference (e.g., u.filePath) inside inline property maps
+  private parsePropValue(): any {
+    if (this.t.peekString()) return this.t.readString()
+    if (this.t.peekNumber()) return this.parseNumber()
+    if (this.t.peekSymbol('{')) return this.parseProps()
+    if (this.t.peekIsKw('TRUE')) {
+      this.t.expectKw('TRUE')
+      return true
+    }
+    if (this.t.peekIsKw('FALSE')) {
+      this.t.expectKw('FALSE')
+      return false
+    }
+    if (this.t.peekIsKw('NULL')) {
+      this.t.expectKw('NULL')
+      return null
+    }
+    // identifier or property reference
+    const ident = this.t.readIdent()
+    if (this.t.peekSymbol('.')) {
+      this.t.expectSymbol('.')
+      const prop = this.t.readIdent()
+      return { kind: 'PropRef', variable: ident, property: prop }
+    }
+    return ident
   }
 
   private parseReturn(): ReturnClause {

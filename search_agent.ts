@@ -442,7 +442,8 @@ export async function runAgentWithStreaming(
     },
   })
   const searchQuery = aiTool({
-    description: 'Search the codebase for relevant chunks to a natural language query.',
+    description:
+      'Search the codebase for relevant chunks to a natural language query. Should be a full-sentance in natural language describing what you want to find.',
     parameters: z.object({ query: z.string() }),
     execute: async ({ query }) => {
       const chunks = await self['db'].search(query)

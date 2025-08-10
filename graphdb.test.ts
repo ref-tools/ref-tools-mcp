@@ -195,6 +195,21 @@ describe('GraphDB - DISTINCT and ORDER BY', () => {
   })
 })
 
+describe('GraphDB - inline prop refs in MATCH patterns', () => {
+  it("supports referencing another variable's property in inline props", () => {
+    const db = new GraphDB()
+    db.run(
+      "CREATE (u:Chunk {name:'User', filePath:'/src/user.ts'}), (d:Chunk {name:'GraphDB', filePath:'/src/graphdb.ts'}), (f:File:Chunk {filePath:'/src/user.ts'}), (u)-[:REFERENCES]->(d)",
+    )
+    const res = db.run(
+      "MATCH (u:Chunk)-[:REFERENCES]->(d:Chunk { name: 'GraphDB' }), (f:File:Chunk { filePath: u.filePath }) RETURN DISTINCT f ORDER BY f.filePath",
+    )
+    expect(res).toHaveLength(1)
+    const f = res[0].f as any
+    expect(f.properties.filePath).toBe('/src/user.ts')
+  })
+})
+
 describe('GraphDB - procedures', () => {
   it('CALL db.labels() returns known labels', () => {
     const db = new GraphDB()

@@ -106,7 +106,7 @@ async function run() {
     const render = (e: AgentStreamEvent) => {
       if (e.type === 'tool_call') {
         const params = e.name === 'search_graph' ? e.input?.cypher : e.input?.query
-        console.log(`\n→ Tool ${e.name}(${JSON.stringify(params)})`)
+        console.log(`→ Tool ${e.name}(${JSON.stringify(params)})`)
       } else if (e.type === 'tool_result') {
         const summary = `${(e.output as any[]).length} chunk(s)`
         console.log(`✓ Result from ${e.name}: ${summary}`)
