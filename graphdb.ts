@@ -37,10 +37,30 @@ export class GraphDB {
     const statements = this.splitStatements(cypher)
     let lastResult: any[] = []
     for (const stmt of statements) {
-      if (!stmt.trim()) continue
-      const parser = new Parser(stmt)
-      const ast = parser.parseStatement()
+      const trimmed = stmt.trim()
+      if (!trimmed) {
+        console.log('skipping empty stmt')
+        continue
+      }
+      // Hardcoded procedure support: CALL db.labels()
+      if (/^CALL\s+db\.labels\(\)\s*$/i.test(trimmed)) {
+        // Labels used by this custom graph: Chunk (all nodes), File (file nodes), Code (non-file code nodes)
+        const labels = ['Chunk', 'Code', 'File']
+        lastResult = labels.sort().map((label) => ({ label }))
+        continue
+      }
+      let ast: Statement
+      try {
+        const parser = new Parser(trimmed)
+        ast = parser.parseStatement()
+      } catch (err: any) {
+        // Log parse errors and rethrow
+        console.error('Parse error:', err?.message || String(err), 'in statement:', trimmed)
+        throw err
+      }
+      console.log('ast', ast)
       lastResult = this.execute(ast)
+      console.log('lastResult', lastResult)
     }
     return lastResult
   }
@@ -85,6 +105,9 @@ export class GraphDB {
           const bindings: Binding[] = [scope]
           let rows = this.applyWhere(bindings, ast.where)
           rows = this.project(rows, ast.returnClause)
+          if (ast.returnClause.distinct) rows = distinctRows(rows)
+          if (ast.returnClause.orderBy && ast.returnClause.orderBy.length > 0)
+            rows = sortRows(rows, ast.returnClause.orderBy)
           if (ast.limit != null) rows = rows.slice(0, ast.limit)
           return rows
         }
@@ -98,7 +121,11 @@ export class GraphDB {
         }
         bindings = this.applyWhere(bindings, ast.where)
         let rows = this.project(bindings, ast.returnClause)
+        if (ast.returnClause?.distinct) rows = distinctRows(rows)
+        if (ast.returnClause?.orderBy && ast.returnClause.orderBy.length > 0)
+          rows = sortRows(rows, ast.returnClause.orderBy)
         if (ast.limit != null) rows = rows.slice(0, ast.limit)
+        console.log('rows', rows)
         return rows
       }
       default:
@@ -220,7 +247,7 @@ export class GraphDB {
   private project(bindings: Binding[], ret?: ReturnClause): any[] {
     if (!ret) return bindings
     const rows: any[] = []
-    if (ret.items.length === 1 && (ret.items[0] as any).agg) {
+    if (ret.items.length === 1 && ret.items[0]!.kind === 'Agg') {
       const item = ret.items[0] as any
       if (item.agg.func === 'count') {
         if (item.agg.arg === '*') {
@@ -244,7 +271,8 @@ export class GraphDB {
     for (const b of bindings) {
       const row: any = {}
       for (const item of ret.items) {
-        const value = item.agg ? aggregateValue(item, bindings) : resolveProjection(item, b)
+        const value =
+          item.kind === 'Agg' ? aggregateValue(item, bindings) : resolveProjection(item, b)
         row[item.alias || itemToKey(item)] = value
       }
       rows.push(row)
@@ -336,15 +364,18 @@ type ReturnItem =
       alias?: string
     }
   | { kind: 'Agg'; agg: { func: 'collect' } & { of: { variable: string } }; alias?: string }
+  | { kind: 'Func'; func: 'labels'; of: { variable: string }; alias?: string }
 
-type ReturnClause = { items: ReturnItem[] }
+type OrderKey = { key: string }
+
+type ReturnClause = { items: ReturnItem[]; distinct?: boolean; orderBy?: OrderKey[] }
 
 type Expr =
   | { kind: 'Binary'; op: 'AND' | 'OR'; left: Expr; right: Expr }
   | { kind: 'Not'; expr: Expr }
   | {
       kind: 'Compare'
-      op: '=' | '!=' | '<>' | '<' | '<=' | '>' | '>='
+      op: '=' | '!=' | '<>' | '<' | '<=' | '>' | '>=' | 'ENDS WITH' | 'STARTS WITH' | 'CONTAINS'
       left: ValueExpr
       right: ValueExpr
     }
@@ -375,6 +406,11 @@ class Parser {
       if (this.t.peekIsKw('RETURN')) {
         ret = this.parseReturn()
       }
+      if (this.t.peekIsKw('ORDER')) {
+        // ORDER BY after RETURN
+        const orderBy = this.parseOrderBy()
+        if (ret) ret.orderBy = orderBy
+      }
       if (this.t.peekIsKw('LIMIT')) {
         this.t.expectKw('LIMIT')
         limit = this.parseNumber()
@@ -394,6 +430,10 @@ class Parser {
       }
       if (this.t.peekIsKw('RETURN')) {
         ret = this.parseReturn()
+      }
+      if (this.t.peekIsKw('ORDER')) {
+        const orderBy = this.parseOrderBy()
+        if (ret) ret.orderBy = orderBy
       }
       if (this.t.peekIsKw('LIMIT')) {
         this.t.expectKw('LIMIT')
@@ -430,7 +470,7 @@ class Parser {
         if (this.t.peekSymbol(':')) {
           relVar = ident
           this.t.expectSymbol(':')
-          relType = this.t.readIdent()
+          relType = this.t.readIdentOrKeyword()
         } else if (ident.toUpperCase() === ident) {
           // TYPE in all-caps
           relType = ident
@@ -440,7 +480,7 @@ class Parser {
       }
       if (this.t.peekSymbol(':') && !relType) {
         this.t.expectSymbol(':')
-        relType = this.t.readIdent()
+        relType = this.t.readIdentOrKeyword()
       }
       if (this.t.peekSymbol('{')) {
         relProps = this.parseProps()
@@ -496,13 +536,43 @@ class Parser {
 
   private parseReturn(): ReturnClause {
     this.t.expectKw('RETURN')
+    let distinct = false
+    if (this.t.peekIsKw('DISTINCT')) {
+      this.t.expectKw('DISTINCT')
+      distinct = true
+    }
     const items: ReturnItem[] = []
     items.push(this.parseReturnItem())
     while (this.t.peekSymbol(',')) {
       this.t.next()
       items.push(this.parseReturnItem())
     }
-    return { items }
+    return { items, distinct }
+  }
+
+  private parseOrderBy(): OrderKey[] {
+    this.t.expectKw('ORDER')
+    this.t.expectKw('BY')
+    const keys: OrderKey[] = []
+    keys.push({ key: this.parseOrderKey() })
+    while (this.t.peekSymbol(',')) {
+      this.t.next()
+      keys.push({ key: this.parseOrderKey() })
+    }
+    return keys
+  }
+
+  private parseOrderKey(): string {
+    const ident = this.t.readIdent()
+    let key = ident
+    if (this.t.peekSymbol('.')) {
+      this.t.expectSymbol('.')
+      key = `${ident}.${this.t.readIdent()}`
+    }
+    // Optional ASC/DESC ignored for now
+    if (this.t.peekIsKw('ASC')) this.t.expectKw('ASC')
+    else if (this.t.peekIsKw('DESC')) this.t.expectKw('DESC')
+    return key
   }
 
   private parseReturnItem(): ReturnItem {
@@ -534,6 +604,18 @@ class Parser {
       return { kind: 'Agg', agg: { func: 'collect', of: { variable: varName } }, alias }
     }
     const ident = this.t.readIdent()
+    // Support function-style projections like labels(n)
+    if (this.t.peekSymbol('(')) {
+      this.t.expectSymbol('(')
+      const varName = this.t.readIdent()
+      this.t.expectSymbol(')')
+      const alias = this.parseOptionalAlias()
+      const func = ident.toLowerCase()
+      if (func === 'labels') {
+        return { kind: 'Func', func: 'labels', of: { variable: varName }, alias }
+      }
+      throw this.t.error(`Unsupported function ${ident}`)
+    }
     if (this.t.peekSymbol('.')) {
       this.t.expectSymbol('.')
       const prop = this.t.readIdent()
@@ -598,6 +680,24 @@ class Parser {
       const op = this.t.readCompareOp() as Expr['kind'] extends never ? never : any
       const right = this.parseValueExpr()
       return { kind: 'Compare', op, left, right }
+    }
+    // Support string operators: ENDS WITH, STARTS WITH, CONTAINS
+    if (this.t.peekIsKw('ENDS')) {
+      this.t.expectKw('ENDS')
+      this.t.expectKw('WITH')
+      const right = this.parseValueExpr()
+      return { kind: 'Compare', op: 'ENDS WITH', left, right }
+    }
+    if (this.t.peekIsKw('STARTS')) {
+      this.t.expectKw('STARTS')
+      this.t.expectKw('WITH')
+      const right = this.parseValueExpr()
+      return { kind: 'Compare', op: 'STARTS WITH', left, right }
+    }
+    if (this.t.peekIsKw('CONTAINS')) {
+      this.t.expectKw('CONTAINS')
+      const right = this.parseValueExpr()
+      return { kind: 'Compare', op: 'CONTAINS', left, right }
     }
     return left
   }
@@ -741,6 +841,9 @@ class Tokenizer {
           case 'MATCH':
           case 'WHERE':
           case 'RETURN':
+          case 'DISTINCT':
+          case 'ORDER':
+          case 'BY':
           case 'LIMIT':
           case 'AND':
           case 'OR':
@@ -748,9 +851,15 @@ class Tokenizer {
           case 'COUNT':
           case 'COLLECT':
           case 'AS':
+          case 'ASC':
+          case 'DESC':
           case 'TRUE':
           case 'FALSE':
           case 'NULL':
+          case 'ENDS':
+          case 'STARTS':
+          case 'WITH':
+          case 'CONTAINS':
             push({ type: 'kw', value: kw })
             break
           default:
@@ -832,6 +941,14 @@ class Tokenizer {
     if (t.type !== 'ident') throw this.error('Expected identifier')
     return t.value
   }
+  // Allow reading either a regular identifier token or a keyword as a name
+  // Useful for relationship TYPE tokens that may be written as uppercase words
+  readIdentOrKeyword(): string {
+    const t = this.next()
+    if (t.type === 'ident') return t.value
+    if (t.type === 'kw') return t.value
+    throw this.error('Expected identifier')
+  }
   peekIsKw(kw: string): boolean {
     const t = this.tok()
     return t.type === 'kw' && t.value === kw
@@ -897,6 +1014,15 @@ function resolveProjection(item: ReturnItem, binding: Binding): any {
       if (!obj) return undefined
       return obj.properties?.[item.property]
     }
+    case 'Func': {
+      if (item.func === 'labels') {
+        const obj = binding[item.of.variable]
+        if (!obj) return undefined
+        if (isNode(obj)) return Array.from(obj.labels)
+        return undefined
+      }
+      return undefined
+    }
     case 'Agg':
       throw new Error('Internal error: aggregate should be pre-handled')
   }
@@ -912,6 +1038,9 @@ function itemToKey(item: ReturnItem): string {
       if (item.agg.func === 'count') return 'count'
       if (item.agg.func === 'collect') return 'collect'
       return 'agg'
+    case 'Func':
+      if (item.func === 'labels') return 'labels'
+      return item.func
   }
 }
 
@@ -964,6 +1093,18 @@ function evalExpr(expr: Expr, binding: Binding): any {
           return (l as any) > (r as any)
         case '>=':
           return (l as any) >= (r as any)
+        case 'ENDS WITH':
+          return typeof (l as any) === 'string' && typeof (r as any) === 'string'
+            ? (l as any).endsWith(r as any)
+            : false
+        case 'STARTS WITH':
+          return typeof (l as any) === 'string' && typeof (r as any) === 'string'
+            ? (l as any).startsWith(r as any)
+            : false
+        case 'CONTAINS':
+          return typeof (l as any) === 'string' && typeof (r as any) === 'string'
+            ? (l as any).includes(r as any)
+            : false
         default:
           return false
       }
@@ -977,4 +1118,56 @@ function valueOf(v: ValueExpr, binding: Binding): any {
     const obj = binding[v.variable]
     return obj?.properties?.[v.property]
   }
+}
+
+// ----------------- Post-projection helpers -----------------
+function stableRowKey(row: any): string {
+  const keys = Object.keys(row).sort()
+  const parts: string[] = []
+  for (const k of keys) {
+    parts.push(k)
+    const v = row[k]
+    // Only support primitives in DISTINCT keys; for objects, fall back to JSON
+    if (v == null || typeof v === 'number' || typeof v === 'string' || typeof v === 'boolean') {
+      parts.push(String(v))
+    } else {
+      try {
+        parts.push(JSON.stringify(v))
+      } catch {
+        parts.push(String(v))
+      }
+    }
+  }
+  return parts.join('|')
+}
+
+function distinctRows(rows: any[]): any[] {
+  const seen = new Set<string>()
+  const out: any[] = []
+  for (const r of rows) {
+    const key = stableRowKey(r)
+    if (!seen.has(key)) {
+      seen.add(key)
+      out.push(r)
+    }
+  }
+  return out
+}
+
+function sortRows(rows: any[], orderBy: { key: string }[]): any[] {
+  const keys = orderBy.map((k) => k.key)
+  const copy = rows.slice()
+  copy.sort((a, b) => {
+    for (const k of keys) {
+      const av = a[k]
+      const bv = b[k]
+      if (av === bv) continue
+      if (typeof av === 'string' && typeof bv === 'string') return av.localeCompare(bv)
+      if (typeof av === 'number' && typeof bv === 'number') return av - bv
+      // Fallback string comparison
+      return String(av).localeCompare(String(bv))
+    }
+    return 0
+  })
+  return copy
 }

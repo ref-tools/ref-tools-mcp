@@ -78,7 +78,7 @@ export function makeOpenAIAnnotator(opts: OpenAIAnnotatorOptions): ChunkAnnotato
         'Content-Type': 'application/json',
         Authorization: `Bearer ${apiKey}`,
       },
-      body: JSON.stringify({ model: embedModel, input: text }),
+      body: JSON.stringify({ model: embedModel, input: text.slice(0, 8192 * 3) }),
     })
     if (!res.ok) throw new Error(`OpenAI embed error: ${res.status} ${await res.text()}`)
     const data: any = await res.json()

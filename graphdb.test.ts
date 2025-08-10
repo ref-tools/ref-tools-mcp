@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { GraphDB } from './graphdb'
 import type { Node, Relationship } from './graphdb'
 
@@ -113,6 +113,25 @@ describe('GraphDB - WHERE', () => {
     const names = (res[0].arr as Node[]).map((n) => n.properties.name).sort()
     expect(names).toEqual(['A', 'B'])
   })
+
+  it('supports string operators: ENDS WITH, STARTS WITH, CONTAINS', () => {
+    const db = new GraphDB()
+    db.run(
+      "CREATE (a:File {filePath:'/path/to/a.ts'}), (b:File {filePath:'/path/to/b.ts'}), (c:File {filePath:'/root/other/c.ts'})",
+    )
+    const ends = db.run("MATCH (f:File) WHERE f.filePath ENDS WITH '/b.ts' RETURN count(*) AS c")
+    expect(ends).toEqual([{ c: 1 }])
+
+    const starts = db.run(
+      "MATCH (f:File) WHERE f.filePath STARTS WITH '/path' RETURN count(*) AS c",
+    )
+    expect(starts).toEqual([{ c: 2 }])
+
+    const contains = db.run(
+      "MATCH (f:File) WHERE f.filePath CONTAINS '/other/' RETURN count(*) AS c",
+    )
+    expect(contains).toEqual([{ c: 1 }])
+  })
 })
 
 describe('GraphDB - RETURN projections', () => {
@@ -157,5 +176,53 @@ describe('GraphDB - LIMIT', () => {
     db.run("CREATE (a:Person {name:'A'}), (b:Person {name:'B'}), (c:Person {name:'C'})")
     const res = db.run('MATCH (p:Person) RETURN p LIMIT 2')
     expect(res).toHaveLength(2)
+  })
+})
+
+describe('GraphDB - DISTINCT and ORDER BY', () => {
+  it('deduplicates rows with DISTINCT and sorts with ORDER BY alias', () => {
+    const db = new GraphDB()
+    db.run("CREATE (a:Person {name:'A'}), (b:Person {name:'B'}), (c:Person {name:'A'})")
+    const res = db.run('MATCH (p:Person) RETURN DISTINCT p.name AS name ORDER BY name')
+    expect(res).toEqual([{ name: 'A' }, { name: 'B' }])
+  })
+
+  it('orders rows without DISTINCT', () => {
+    const db = new GraphDB()
+    db.run("CREATE (a:Person {name:'B'}), (b:Person {name:'A'}), (c:Person {name:'A'})")
+    const res = db.run('MATCH (p:Person) RETURN p.name AS name ORDER BY name')
+    expect(res.map((r) => r.name)).toEqual(['A', 'A', 'B'])
+  })
+})
+
+describe('GraphDB - procedures', () => {
+  it('CALL db.labels() returns known labels', () => {
+    const db = new GraphDB()
+    // even without data, labels are known a priori for our custom graph
+    const res = db.run('CALL db.labels()')
+    // should yield rows like { label: 'Chunk' } in sorted order
+    const labels = res.map((r) => r.label)
+    expect(labels).toEqual(['Chunk', 'Code', 'File'])
+  })
+})
+
+describe('GraphDB - function projections', () => {
+  it('supports labels(n) in RETURN', () => {
+    const db = new GraphDB()
+    db.run("CREATE (a:File {filePath:'/x'}), (b:Code {name:'Y'}), (c:File:Chunk {filePath:'/z'})")
+    const res = db.run('MATCH (n) RETURN labels(n) AS labels, count(*) AS cnt LIMIT 1')
+    expect(Array.isArray(res[0].labels)).toBe(true)
+    // labels should be arrays of strings for nodes
+    expect(res[0].labels.every((x: any) => typeof x === 'string')).toBe(true)
+  })
+})
+
+describe('GraphDB - parse error logging', () => {
+  it('logs an error on parse errors', () => {
+    const db = new GraphDB()
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    expect(() => db.run('MATCH (n RETURN n')).toThrow()
+    expect(spy).toHaveBeenCalled()
+    spy.mockRestore()
   })
 })

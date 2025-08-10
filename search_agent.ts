@@ -425,7 +425,8 @@ export async function runAgentWithStreaming(
 
   const openai = createOpenAI({ apiKey })
   const searchGraph = aiTool({
-    description: 'Run a Cypher query on the code graph and return rows.',
+    description:
+      'Run a Cypher query on the code graph and return rows. Supported (subset): CREATE, MATCH (node-only or single hop), labels (:Label) and inline property filters, WHERE with =, !=, <, <=, >, >= and AND/OR/NOT, RETURN variables and properties, count(*), count(var), collect(var), AS aliases, DISTINCT, ORDER BY, LIMIT. Labels available: Chunk, Code, File. Relationships available: REFERENCES, CONTAINS. Introspection: CALL db.labels().',
     parameters: z.object({ cypher: z.string() }),
     execute: async ({ cypher }) => {
       const rows = self['graph'].run(cypher)
