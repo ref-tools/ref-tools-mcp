@@ -1,6 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import crypto from 'node:crypto'
+import ignore from 'ignore'
 import Parser, { type SyntaxNode } from 'tree-sitter'
 import JavaScript from 'tree-sitter-javascript'
 import Python from 'tree-sitter-python'
@@ -255,7 +256,34 @@ export async function chunkCodebase(
   rootDir: string,
   options: ChunkerOptions = {},
 ): Promise<Chunk[]> {
-  const files = walkDir(rootDir, options.shouldIncludePath)
+  // Compose a filter that honors .gitignore and any user-provided filter
+  const gitignoreFile = path.join(rootDir, '.gitignore')
+  let ig: ReturnType<typeof ignore> | undefined
+  try {
+    if (fs.existsSync(gitignoreFile)) {
+      const giText = fs.readFileSync(gitignoreFile, 'utf8')
+      ig = ignore()
+      ig.add(giText)
+    }
+  } catch {
+    // Best-effort: ignore failures reading .gitignore
+  }
+
+  const userFilter = options.shouldIncludePath
+  const composedFilter = (absPath: string, relPath: string): boolean => {
+    const relUnix = relPath.split(path.sep).join('/')
+    // Always skip VCS dir
+    if (/(^|\/)\.git(\/|$)/.test(relUnix)) return false
+    // Apply .gitignore if present
+    if (ig && ig.ignores(relUnix)) return false
+    // Default skip for node_modules when no .gitignore rule provided
+    if (!ig && /(^|\/)node_modules(\/|$)/.test(relUnix)) return false
+    // Apply user filter last if provided
+    if (userFilter && !userFilter(absPath, relPath)) return false
+    return true
+  }
+
+  const files = walkDir(rootDir, composedFilter)
   const all: Chunk[] = []
   for (const abs of files) {
     const res = await chunkFile(abs, options)

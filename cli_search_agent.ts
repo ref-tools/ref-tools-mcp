@@ -6,6 +6,8 @@ import SearchAgent, {
   type AgentStreamEvent,
   runAgentWithStreaming,
 } from './search_agent'
+import { makeOpenAIAnnotator } from './openai_searchdb'
+import { pickChunks, pickChunksFilter } from './pickdocs'
 
 function usage() {
   return [
@@ -93,6 +95,8 @@ async function run() {
     useOpenAI: useAgent,
     agentModel: model,
     openaiApiKey: apiKey || undefined,
+    annotator: apiKey ? makeOpenAIAnnotator({ apiKey }) : undefined,
+    relevanceFilter: apiKey ? pickChunksFilter : undefined,
   })
   await agent.ingest()
   s.stop('Index ready.')

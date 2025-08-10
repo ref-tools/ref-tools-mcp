@@ -38,7 +38,8 @@
 [x] merkle tree for updating as files update
 https://github.com/ref-tools/ref-tools-mcp/pull/15
 [x] dig in and manually debug to make sure it works good
-[] add in pick docs
+[x] add in pick docs
+[] chunk the right amounts
 [] mode that just returns name and allow loading thecontents as needed
 
 # persistence for different dbs
@@ -47,16 +48,17 @@ https://github.com/ref-tools/ref-tools-mcp/pull/15
 # connected mcp server
 [] require a directory and openai env variables in config, otherwise don't setup these capabilites
 [] launch a SearchAgent in the directory
-[] tool search_deep_dive() to find info about the repo that calls search agent
-[] tools search_code_text() and search_code_graph() for direct searches
+[] tool search_deep_dive() to find info about the repo that calls search agent 
+[] tools search_code_text() and search_code_graph() for direct searches 
 
 # visual results
-[x] Update SearchAgent to optionally be able to return a visual with mcp-ui https://github.com/ref-tools/ref-tools-mcp/pull/16
-[] improve the UI and make it more digest able across
-[] add more larger repos
+x] Update SearchAgent to optionally be able to return a visual with mcp-ui 
+
 
 # see how much it can improve itself
-[] generate a bench mark test for each searchdb, graphdb (save results to a file, have a ui for viewing)
+[x] generate a bench mark test for each searchdb, graphdb (save results to a file, have a ui for viewing) https://github.com/ref-tools/ref-tools-mcp/pull/16
+[] add more larger repos
+[] improve the UI and make it more digest able across
 [] optimize the shit out of in-memory systems
 - do this 3 times
 [] rewrite in rust with bindings (do on repeat)

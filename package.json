@@ -34,6 +34,7 @@
     "@modelcontextprotocol/sdk": "^1.0.3",
     "ai": "^4.3.19",
     "axios": "^1.8.4",
+    "ignore": "^5.3.1",
     "tree-sitter": "0.21.1",
     "tree-sitter-c": "0.23.0",
     "tree-sitter-java": "^0.23.1",

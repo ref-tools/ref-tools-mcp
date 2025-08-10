@@ -127,4 +127,22 @@ describe('chunker by language', () => {
     const hasContains = chunks.some((c) => c.relations.some((r) => r.type === 'contains'))
     expect(hasContains).toBe(true)
   })
+
+  it('respects .gitignore when walking codebase', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'chunker-gi-'))
+    // write .gitignore to exclude ignored/ and *.skip.js
+    fs.writeFileSync(path.join(dir, '.gitignore'), `ignored/\n*.skip.js\n!included.skip.js\n`)
+    // files
+    write(dir, 'ok.js', `function ok(){}`)
+    write(dir, 'ignored/hide.js', `function hidden(){}`)
+    write(dir, 'temp.skip.js', `function nope(){}`)
+    write(dir, 'included.skip.js', `function show(){}`)
+
+    const chunks = await chunkCodebase(dir, { languages: ['javascript'] })
+    const files = chunks.filter((c) => c.type === 'file').map((c) => c.filePath)
+    expect(files.some((p) => p.endsWith('ok.js'))).toBe(true)
+    expect(files.some((p) => p.endsWith('included.skip.js'))).toBe(true)
+    expect(files.some((p) => p.includes('ignored/hide.js'))).toBe(false)
+    expect(files.some((p) => p.endsWith('temp.skip.js'))).toBe(false)
+  })
 })

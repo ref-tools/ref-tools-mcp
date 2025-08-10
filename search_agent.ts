@@ -42,25 +42,7 @@ export class SearchAgent {
     private rootDir: string,
     private opts: SearchAgentOptions = {},
   ) {
-    // If a relevance filter is provided explicitly, use it. Otherwise, if an OpenAI API key
-    // is available, wire up the pickChunks-based filter using gpt-5-nano.
-    const apiKey = opts.openaiApiKey || process.env.OPENAI_API_KEY
-    const effectiveFilter: RelevanceFilter | undefined =
-      opts.relevanceFilter ||
-      (apiKey
-        ? async (query, items) => {
-            const { chunks } = await pickChunks(query, items, {
-              apiKey,
-              model: 'gpt-5-nano',
-            })
-            return chunks
-          }
-        : undefined)
-
-    this.db = new SearchDB({
-      annotator: opts.annotator,
-      relevanceFilter: effectiveFilter,
-    })
+    this.db = new SearchDB({ annotator: opts.annotator })
   }
 
   // -------- Public API --------

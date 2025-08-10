@@ -1,6 +1,7 @@
 import path from 'node:path'
 import { z } from 'zod'
 import type { AnnotatedChunk } from './chunker'
+import type { RelevanceFilter } from './searchdb'
 
 const PickChunksSchema = z.object({
   chunks: z.array(z.number()),
@@ -41,6 +42,14 @@ function coerceJson<T>(text: string, schema: z.ZodType<T>): T {
     if (m) return m
   }
   throw new Error('Model did not return valid JSON for PickChunksSchema')
+}
+
+export const pickChunksFilter: RelevanceFilter = async (query, items) => {
+  const { chunks } = await pickChunks(query, items, {
+    apiKey: process.env.OPENAI_API_KEY!,
+    model: 'gpt-5-nano',
+  })
+  return chunks
 }
 
 export async function pickChunks(
