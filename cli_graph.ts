@@ -50,9 +50,10 @@ async function run() {
 
   const agent = new SearchAgent(root, { languages })
   await agent.ingest()
-  const rows = agent.search_graph(cypher)
-  for (const [i, r] of rows.entries()) {
-    console.log(`#${i + 1}`, JSON.stringify(r, null, 2))
+  const chunks = agent.search_graph(cypher)
+  for (const [i, c] of chunks.entries()) {
+    const lines = c.type === 'file' ? '' : `:${c.line}-${c.endLine}`
+    console.log(`#${i + 1} ${c.filePath}${lines} ${c.language} ${c.name || ''}`)
   }
 }
 

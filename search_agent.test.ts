@@ -26,14 +26,14 @@ describe('SearchAgent ingest + search', () => {
 })
 
 describe('SearchAgent graph queries', () => {
-  it('returns nodes via cypher MATCH', async () => {
+  it('returns chunks via cypher MATCH', async () => {
     const dir = tmpDir()
     const f = path.join(dir, 'one.js')
     fs.writeFileSync(f, `function x(){ return 42 }`)
     const agent = new SearchAgent(dir, { languages: ['javascript'] })
     await agent.ingest()
-    const rows = agent.search_graph('MATCH (n:Chunk) RETURN count(*) AS c')
-    expect(rows[0].c).toBeGreaterThan(0)
+    const chunks = agent.search_graph('MATCH (n:Chunk) RETURN n')
+    expect(chunks.length).toBeGreaterThan(0)
   })
 })
 
@@ -64,4 +64,3 @@ describe('SearchAgent watcher + merkle tree', () => {
     expect(all).toContain('watch.ts')
   })
 })
-

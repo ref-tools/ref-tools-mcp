@@ -9,6 +9,8 @@
 // - LIMIT
 
 export type Properties = Record<string, any>
+// Importing types only to avoid runtime coupling
+import type { Chunk } from './chunker'
 
 export type Node = {
   id: number
@@ -276,6 +278,44 @@ export class GraphDB {
     }
     return rows
   }
+}
+
+// Helper: extract Chunk nodes from generic result rows using provided chunk catalog.
+// This maps any returned node values (or arrays of nodes) with a 'Chunk' label
+// to the corresponding full Chunk objects from `allChunks` (by matching `id`).
+export function rowsToChunks(rows: any[], allChunks: Chunk[]): Chunk[] {
+  const byId = new Map<string, Chunk>()
+  for (const c of allChunks) byId.set(c.id, c)
+  const out: Chunk[] = []
+  const seen = new Set<string>()
+
+  const consider = (val: any) => {
+    if (val && typeof val === 'object') {
+      // Node from GraphDB
+      if ('labels' in val && 'properties' in val && val.properties && val.labels) {
+        const labels = val.labels as Set<string>
+        if (labels.has('Chunk')) {
+          const id = String(val.properties.id || '')
+          const c = id ? byId.get(id) : undefined
+          if (c && !seen.has(c.id)) {
+            seen.add(c.id)
+            out.push(c)
+          }
+        }
+      }
+      // Arrays (e.g., collect())
+      else if (Array.isArray(val)) {
+        for (const v of val) consider(v)
+      }
+      // Nested objects: scan shallowly
+      else {
+        for (const k of Object.keys(val)) consider((val as any)[k])
+      }
+    }
+  }
+
+  for (const r of rows) consider(r)
+  return out
 }
 
 function isNode(x: any): x is Node {

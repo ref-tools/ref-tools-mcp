@@ -2,7 +2,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import crypto from 'node:crypto'
 import { chunkCodebase, chunkFile, type Chunk } from './chunker'
-import { GraphDB } from './graphdb'
+import { GraphDB, rowsToChunks } from './graphdb'
 import { SearchDB, type ChunkAnnotator, type RelevanceFilter } from './searchdb'
 // pickChunks is only used via pickChunksFilter when configured
 import { streamText, tool as aiTool } from 'ai'
@@ -20,7 +20,7 @@ export type SearchAgentOptions = {
   agentModel?: string // default: gpt-5
 }
 
-export type QueryResult = { kind: 'graph'; rows: any[] } | { kind: 'search'; chunks: Chunk[] }
+export type QueryResult = { kind: 'graph'; chunks: Chunk[] } | { kind: 'search'; chunks: Chunk[] }
 
 export type AgentMode = 'findContext' | 'answer'
 
@@ -68,8 +68,10 @@ export class SearchAgent {
     return { kind: 'search', chunks }
   }
 
-  search_graph(cypher: string): any[] {
-    return this.graph.run(cypher)
+  search_graph(cypher: string): Chunk[] {
+    const rows = this.graph.run(cypher)
+    const all: Chunk[] = (this.db as any).listChunks()
+    return rowsToChunks(rows, all)
   }
 
   async search_query(prompt: string): Promise<Chunk[]> {
@@ -427,13 +429,15 @@ export async function runAgentWithStreaming(
   const openai = createOpenAI({ apiKey })
   const searchGraph = aiTool({
     description:
-      'Run a Cypher query on the code graph and return rows. Supported (subset): CREATE, MATCH (node-only or single hop), labels (:Label) and inline property filters, WHERE with =, !=, <, <=, >, >= and AND/OR/NOT, RETURN variables and properties, count(*), count(var), collect(var), AS aliases, DISTINCT, ORDER BY, LIMIT. Labels available: Chunk, Code, File. Relationships available: REFERENCES, CONTAINS. Introspection: CALL db.labels().',
+      'Run a Cypher query on the code graph and return matching chunks. Supported (subset): CREATE, MATCH (node-only or single hop), labels (:Label) and inline property filters, WHERE with =, !=, <, <=, >, >= and AND/OR/NOT, RETURN variables and properties, count(*), count(var), collect(var), AS aliases, DISTINCT, ORDER BY, LIMIT. Labels available: Chunk, Code, File. Relationships available: REFERENCES, CONTAINS. Introspection: CALL db.labels().',
     parameters: z.object({ cypher: z.string() }),
     execute: async ({ cypher }) => {
       const rows = self['graph'].run(cypher)
-      return rows.map((row: any) => ({
+      const all: Chunk[] = (self as any)['db'].listChunks()
+      const chunks = rowsToChunks(rows, all)
+      return chunks.map((chunk: Chunk) => ({
         type: 'text',
-        text: JSON.stringify(row),
+        text: `${chunk.filePath} ${chunk.type === 'file' ? '' : `${chunk.line}-${chunk.endLine}`}\n---\n${chunk.content}`,
       }))
     },
   })
