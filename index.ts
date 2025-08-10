@@ -21,6 +21,7 @@ import { createServer } from 'http'
 import { randomUUID } from 'crypto'
 import { uiHelloTool, callUiHello } from './helloui.js'
 import { generateUiTool, callGenerateUi } from './genui.js'
+import { visualizeCodeTool, callVisualizeCode } from './visualize_code.js'
 import SearchAgent, {
   createSearchGraphTool,
   createSearchQueryTool,
@@ -154,6 +155,7 @@ function createServerInstance(mcpClient: string = 'unknown', sessionId?: string)
         : ([] as any)),
       uiHelloTool,
       generateUiTool,
+      visualizeCodeTool,
     ],
   }))
 
@@ -297,6 +299,24 @@ function createServerInstance(mcpClient: string = 'unknown', sessionId?: string)
         throw new McpError(ErrorCode.InvalidParams, 'Missing required argument: message')
       }
       return callGenerateUi(args)
+    }
+
+    if (request.params.name === 'visualize_code') {
+      const args = (request.params.arguments || {}) as {
+        message: string
+        title?: string
+      }
+      if (!args.message) {
+        throw new McpError(ErrorCode.InvalidParams, 'Missing required argument: message')
+      }
+      // Try to include an up-to-date graph snapshot if local code agent is initialized
+      let graph: any = undefined
+      try {
+        // Access internal graph reference like other code tools do
+        const g = (codeSearchAgent as any)?.['graph']
+        graph = typeof g?.getGraph === 'function' ? g.getGraph() : undefined
+      } catch {}
+      return callVisualizeCode({ message: args.message, title: args.title, graph })
     }
 
     throw new McpError(ErrorCode.MethodNotFound, `Could not find tool: ${request.params.name}`)
