@@ -173,6 +173,9 @@ npm run build
 npm run watch
 ```
 
+Rust native SearchDB bindings
+- See `RUST_BINDINGS.md` for building the Rust-backed search engine and enabling it in the agent or benchmarks.
+
 ## License
 
 MIT
