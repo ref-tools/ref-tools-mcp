@@ -596,11 +596,9 @@ async function main() {
 
             await transport.handleRequest(req, res, body)
           } else if (req.method === 'DELETE') {
-            console.log('DELETE request', transports[req.headers['mcp-session-id'] as string])
             const sessionId = req.headers['mcp-session-id'] as string | undefined
             if (sessionId && transports[sessionId]) {
               await transports[sessionId].close()
-              console.log('closed transport', sessionId)
               res.writeHead(200)
               res.end()
               return

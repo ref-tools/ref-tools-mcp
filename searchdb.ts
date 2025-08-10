@@ -401,7 +401,7 @@ export class SearchDB {
     this.bm25.add(chunk.id, bm25Text)
     this.vectors.add(chunk.id, embedding)
   }
-  async addChunks(chunks: Chunk[]): Promise<void> {
+  async addChunks(chunks: Chunk[], verbose = false): Promise<void> {
     const batchSize = 10
     const startTime = Date.now()
 
@@ -417,7 +417,7 @@ export class SearchDB {
       const estimatedRemainingMs = remaining / rate
       const estimatedRemainingMin = Math.ceil(estimatedRemainingMs / 60000)
 
-      if (batchNumber % 10 === 0) {
+      if (verbose && batchNumber % 10 === 0) {
         const timeStr = estimatedRemainingMin > 0 ? ` (~${estimatedRemainingMin}m remaining)` : ''
         process.stdout.write(
           `\rProcessing batch ${batchNumber}/${Math.ceil(chunks.length / batchSize)} (${processed}/${chunks.length} chunks)${timeStr}`,

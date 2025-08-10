@@ -31,7 +31,6 @@ export class GraphDB {
     for (const stmt of statements) {
       const trimmed = stmt.trim()
       if (!trimmed) {
-        console.log('skipping empty stmt')
         continue
       }
       // Hardcoded procedure support: CALL db.labels()

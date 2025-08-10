@@ -282,7 +282,7 @@ async function benchSearchDB(repoName: string, chunks: Chunk[], iterations = 1) 
   })
   const t0 = nowNs()
   console.log(`Starting to build index.`)
-  await search.addChunks(chunks)
+  await search.addChunks(chunks, true)
   const t1 = nowNs()
   const indexTimeMs = msBetween(t0, t1)
   console.log(`Index built in ${indexTimeMs.toFixed(1)} ms`)
@@ -783,7 +783,9 @@ async function main() {
       break
     default:
       console.log('Usage: tsx cli_bench.ts <setup|run|viz> [small] [--name <experiment>]')
-      console.log('Env: BENCH_ITERS=5, BENCH_MODE=small, BENCH_REPOS=chalk,axios, BENCH_NAME="My Experiment"')
+      console.log(
+        'Env: BENCH_ITERS=5, BENCH_MODE=small, BENCH_REPOS=chalk,axios, BENCH_NAME="My Experiment"',
+      )
       console.log('Example via npm: npm run bench:run -- --name "exp-1"')
   }
 }
