@@ -131,7 +131,7 @@ A simple benchmark harness is included to ingest several popular open-source rep
 
   Opens a minimal static viewer at `bench/viewer/index.html` that auto-refreshes and shows per-repo summaries plus per-query charts with error bars (mean ± stdev). It reacts to new runs automatically.
 
-Repos used by default: chalk, axios, date-fns, express, and a large repository for stress testing (DefinitelyTyped). You can pre-clone your own into `../bench_repos/<name>` and extend the list in `cli_bench.ts`.
+Repos used by default: chalk, axios, date-fns, express, and a large, real-world app for stress testing (microsoft/vscode). You can pre-clone your own into `../bench_repos/<name>` and extend the list in `cli_bench.ts`.
 
 Per-repo SearchDB queries are realistic and domain-specific (10 each).
 GraphDB queries cover structural counts (files/chunks by language/type, size thresholds, and edges) to exercise pattern and filter performance.

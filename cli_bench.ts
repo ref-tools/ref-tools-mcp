@@ -15,8 +15,8 @@ const REPOS: RepoSpec[] = [
   { name: 'axios', url: 'https://github.com/axios/axios.git' },
   { name: 'date-fns', url: 'https://github.com/date-fns/date-fns.git' },
   { name: 'express', url: 'https://github.com/expressjs/express.git' },
-  // Larger repo (~10k+ files) to stress test chunking and indexing
-  { name: 'definitely-typed', url: 'https://github.com/DefinitelyTyped/DefinitelyTyped.git' },
+  // Larger real-world app (~10k+ files) to stress test chunking and indexing
+  { name: 'vscode', url: 'https://github.com/microsoft/vscode.git' },
 ]
 
 const BENCH_DIR = path.resolve(process.cwd(), 'bench')
