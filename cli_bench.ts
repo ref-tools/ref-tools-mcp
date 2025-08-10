@@ -97,6 +97,16 @@ function safeString(v: unknown): string {
   return String(v).replace(/"/g, '\\"')
 }
 
+// Make a safe filename from an arbitrary label
+function safeFilename(name: string): string {
+  const s = String(name || '')
+    .trim()
+    .replace(/\s+/g, '-')
+    .replace(/[^a-zA-Z0-9._-]/g, '')
+    .slice(0, 128)
+  return s || ''
+}
+
 function buildGraphForChunks(db: GraphDB, chunks: Chunk[]) {
   // Build id -> chunk map
   const byId = new Map<string, Chunk>()
@@ -436,6 +446,18 @@ async function cmdRun() {
   fs.writeFileSync(outPath, JSON.stringify(results, null, 2))
   console.log(`Wrote results: ${path.relative(process.cwd(), outPath)}`)
 
+  // Write a duplicate file keyed by runName for easier visualization lookup
+  const runNameFile = safeFilename(results.runName)
+  if (runNameFile && runNameFile !== results.runId) {
+    const byNamePath = path.join(RESULTS_DIR, `${runNameFile}.json`)
+    try {
+      fs.writeFileSync(byNamePath, JSON.stringify(results, null, 2))
+      console.log(`Wrote results (by name): ${path.relative(process.cwd(), byNamePath)}`)
+    } catch (e) {
+      console.warn('Could not write results by runName:', e)
+    }
+  }
+
   // Update index.json summary
   const indexPath = path.join(RESULTS_DIR, 'index.json')
   let index: any[] = []
@@ -572,6 +594,11 @@ const VIEWER_HTML = `<!doctype html>
       function fmt(n){ return typeof n==='number'? n.toFixed(1): n }
       const COLORS = ['#2563eb','#16a34a','#dc2626','#7c3aed','#db2777','#059669','#f59e0b','#0ea5e9','#a855f7','#ef4444']
 
+      function safeName(name){
+        const s = String(name||'').trim().replace(/\s+/g,'-').replace(/[^a-zA-Z0-9._-]/g,'').slice(0,128)
+        return s
+      }
+
       function summarize(times){
         const arr = (times||[]).filter((n)=> typeof n==='number' && isFinite(n))
         const n = Math.max(1, arr.length)
@@ -678,7 +705,15 @@ const VIEWER_HTML = `<!doctype html>
         const idx = await fetchJSON('../results/index.json')
         const metaEl = document.getElementById('runMeta');
         if (!idx || !idx.length) { metaEl.textContent = 'No runs yet. Run npm run bench:run'; return }
-        const runs = await Promise.all(idx.map(async (x)=> await fetchJSON('../results/' + x.runId + '.json')))
+        async function loadRun(x){
+          const byNameKey = safeName(x.runName||'')
+          if (byNameKey){
+            const byName = await fetchJSON('../results/' + byNameKey + '.json')
+            if (byName) return byName
+          }
+          return await fetchJSON('../results/' + x.runId + '.json')
+        }
+        const runs = (await Promise.all(idx.map(loadRun))).filter(Boolean)
         const names = idx.map((x)=> x.runName || x.runId)
         metaEl.textContent = names.join(' • ')
         const dataset = document.getElementById('dataset').value
