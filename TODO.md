@@ -53,6 +53,7 @@ https://github.com/ref-tools/ref-tools-mcp/pull/15
 # visual results
 [x] Update SearchAgent to optionally be able to return a visual with mcp-ui 
 [x] visualize tool that will take a prompt + automaitcally dump the entire graph into context https://github.com/ref-tools/ref-tools-mcp/pull/26
+[] verify visualize working
 
 # see how much it can improve itself
 [x] generate a bench mark test for each searchdb, graphdb (save results to a file, have a ui for viewing) https://github.com/ref-tools/ref-tools-mcp/pull/16
