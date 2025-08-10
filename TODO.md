@@ -27,8 +27,6 @@
 - storage of hash->array<node> - node should be able to use this to lookup in graphdb
 [x] build this https://github.com/ref-tools/ref-tools-mcp/pull/14
 
-
-
 # connected cli
 [x] SearchAgent(directory)
   - ingests a directory to chunks, embeds, creates graph deb
@@ -40,19 +38,18 @@ https://github.com/ref-tools/ref-tools-mcp/pull/15
 [x] dig in and manually debug to make sure it works good
 [x] add in pick docs
 [x] fix up knowledge graph to be sure it works good
-[] improve pick
-[] chunk the right amounts
-[] update graphdb to return Chunks 
+[x] improve pick
+[x] update graphdb to return Chunks 
 [] add read tool and have search agent return 
 
 # persistence for different dbs
 [] should allow restarting search agent, reloading serialized data and compare merkel tree to data
 
 # connected mcp server
-[] require a directory and openai env variables in config, otherwise don't setup these capabilites
+[] require a REF_DIRECTORY and OPENAI_API_KEY env variables in config, otherwise don't setup these capabilites
 [] launch a SearchAgent in the directory
 [] tool search_deep_dive() to find info about the repo that calls search agent 
-[] tools search_code_text() and search_code_graph() for direct searches 
+[] tools search_code_text() and search_code_graph() for direct searches, have these just return 
 
 # visual results
 [x] Update SearchAgent to optionally be able to return a visual with mcp-ui 
