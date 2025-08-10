@@ -75,26 +75,37 @@ export async function callGenerateUi(args: { message: string; title?: string; th
   return { content: [uiResource] as any }
 }
 
-function ensureHtmlDocument(maybeHtml: string): string {
+export function ensureHtmlDocument(maybeHtml: string): string {
   const trimmed = (maybeHtml || '').trim()
   const hasHtmlTag = /<html[\s\S]*?>[\s\S]*<\/html>/i.test(trimmed)
 
   // ResizeObserver to notify host of UI size changes
   const resizeScript = `<script>
-const resizeObserver = new ResizeObserver((entries) => {
-  entries.forEach((entry) => {
-    window.parent.postMessage(
-      {
-        type: "ui-size-change",
-        payload: {
-          height: entry.contentRect.height,
-        },
-      },
-      "*"
-    );
-  });
+const MIN_HEIGHT = 640;
+
+function postHeight(h) {
+  const height = Math.max(MIN_HEIGHT, (h || 0));
+  window.parent.postMessage(
+    { type: "ui-size-change", payload: { height } },
+    "*"
+  );
+}
+
+// Ensure document has at least MIN_HEIGHT visually as well
+document.addEventListener('DOMContentLoaded', () => {
+  try {
+    if (document.documentElement) document.documentElement.style.minHeight = MIN_HEIGHT + 'px';
+    if (document.body) document.body.style.minHeight = MIN_HEIGHT + 'px';
+  } catch {}
+  // After initial render, request at least MIN_HEIGHT once to grow host frame
+  setTimeout(() => postHeight(MIN_HEIGHT), 60);
 });
 
+const resizeObserver = new ResizeObserver((entries) => {
+  for (const entry of entries) {
+    postHeight(entry.contentRect && entry.contentRect.height);
+  }
+});
 resizeObserver.observe(document.documentElement);
 </script>`
 
@@ -113,8 +124,8 @@ resizeObserver.observe(document.documentElement);
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <style>
       :root { color-scheme: light dark; }
-      body { font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, sans-serif; margin: 0; padding: 16px; }
-      .container { max-width: 720px; margin: 0 auto; }
+      body { font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, sans-serif; margin: 0; padding: 16px; min-height: 640px; }
+      .container { max-width: 720px; margin: 0 auto; min-height: 640px; }
     </style>
   </head>
   <body>
