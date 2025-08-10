@@ -21,6 +21,12 @@ import { createServer } from 'http'
 import { randomUUID } from 'crypto'
 import { uiHelloTool, callUiHello } from './helloui.js'
 import { generateUiTool, callGenerateUi } from './genui.js'
+import SearchAgent, {
+  createSearchGraphTool,
+  createSearchQueryTool,
+  SEARCH_GRAPH_DESCRIPTION,
+  SEARCH_QUERY_DESCRIPTION,
+} from './search_agent.js'
 
 // Tool configuration based on client type
 type ToolConfig = {
@@ -44,6 +50,14 @@ const HTTP_PORT = parseInt(process.env.PORT || '8080', 10)
 
 // Global variables to store current request config
 let currentApiKey: string | undefined = undefined
+// Optional code search agent (gated by env)
+let codeSearchAgent: SearchAgent | undefined
+let codeSearchTools:
+  | {
+      searchQueryExecute: ((args: { query: string }) => Promise<{ type: 'text'; text: string }[]>) | null
+      searchGraphExecute: ((args: { cypher: string }) => Promise<{ type: 'text'; text: string }[]>) | null
+    }
+  | undefined
 
 // Session management for HTTP transport
 const transports: { [sessionId: string]: StreamableHTTPServerTransport } = {}
@@ -112,7 +126,35 @@ function createServerInstance(mcpClient: string = 'unknown', sessionId?: string)
 
   // Register request handlers
   server.setRequestHandler(ListToolsRequestSchema, async () => ({
-    tools: [searchTool, readTool, uiHelloTool, generateUiTool],
+    tools: [
+      searchTool,
+      readTool,
+      // Conditionally expose local code search tools when configured (env-gated)
+      ...(process.env.REF_DIRECTORY && process.env.OPENAI_API_KEY
+        ? ([
+            {
+              name: 'search_code_text',
+              description: SEARCH_QUERY_DESCRIPTION,
+              inputSchema: {
+                type: 'object',
+                properties: { query: { type: 'string', description: 'Natural language query' } },
+                required: ['query'],
+              },
+            },
+            {
+              name: 'search_code_graph',
+              description: SEARCH_GRAPH_DESCRIPTION,
+              inputSchema: {
+                type: 'object',
+                properties: { cypher: { type: 'string', description: 'Cypher query' } },
+                required: ['cypher'],
+              },
+            },
+          ] as any)
+        : ([] as any)),
+      uiHelloTool,
+      generateUiTool,
+    ],
   }))
 
   server.setRequestHandler(ListPromptsRequestSchema, async () => ({
@@ -196,6 +238,44 @@ function createServerInstance(mcpClient: string = 'unknown', sessionId?: string)
         query: string
       }
       return doSearch(input.query, mcpClient, sessionId)
+    }
+
+    if (request.params.name === 'search_code_text') {
+      if (!codeSearchAgent || !codeSearchTools?.searchQueryExecute) {
+        return {
+          content: [
+            {
+              type: 'text',
+              text: 'Local code search is not configured. Set REF_DIRECTORY and OPENAI_API_KEY.',
+            },
+          ],
+        }
+      }
+      const input = request.params.arguments as { query: string }
+      if (!input?.query) {
+        throw new McpError(ErrorCode.InvalidParams, 'Missing required argument: query')
+      }
+      const out = await codeSearchTools.searchQueryExecute({ query: input.query })
+      return { content: out }
+    }
+
+    if (request.params.name === 'search_code_graph') {
+      if (!codeSearchAgent || !codeSearchTools?.searchGraphExecute) {
+        return {
+          content: [
+            {
+              type: 'text',
+              text: 'Local code graph search is not configured. Set REF_DIRECTORY and OPENAI_API_KEY.',
+            },
+          ],
+        }
+      }
+      const input = request.params.arguments as { cypher: string }
+      if (!input?.cypher) {
+        throw new McpError(ErrorCode.InvalidParams, 'Missing required argument: cypher')
+      }
+      const out = await codeSearchTools.searchGraphExecute({ cypher: input.cypher })
+      return { content: out }
     }
 
     if (request.params.name === toolConfig.readToolName) {
@@ -576,3 +656,33 @@ export default function () {
   const server = createServerInstance()
   return server
 }
+
+// Initialize local code search agent once per process if env is set
+;(async () => {
+  try {
+    const dir = process.env.REF_DIRECTORY
+    const openai = process.env.OPENAI_API_KEY
+    if (dir && openai) {
+      codeSearchAgent = new SearchAgent(dir, {
+        watch: true,
+        openaiApiKey: openai,
+      })
+      // Kick off initial ingest in background
+      codeSearchAgent.ingest().catch((e) => console.error('SearchAgent ingest error:', e))
+      // Prepare reusable tool executors from ai tools
+      const graphTool = createSearchGraphTool(codeSearchAgent)
+      const queryTool = createSearchQueryTool(codeSearchAgent)
+      codeSearchTools = {
+        searchGraphExecute: graphTool.execute,
+        searchQueryExecute: queryTool.execute,
+      }
+      console.error('Local code SearchAgent initialized for', dir)
+    } else {
+      console.error(
+        'Local code search disabled. Set REF_DIRECTORY and OPENAI_API_KEY to enable search_code_* tools.',
+      )
+    }
+  } catch (e) {
+    console.error('Failed to initialize local code SearchAgent:', e)
+  }
+})()
