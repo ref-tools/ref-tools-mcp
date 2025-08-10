@@ -430,7 +430,7 @@ export async function runAgentWithStreaming(
   const openai = createOpenAI({ apiKey })
   const searchGraph = aiTool({
     description:
-      'Run a Cypher query on the code graph and return matching chunks. Supported (subset): CREATE, MATCH (node-only or single hop), labels (:Label) and inline property filters, WHERE with =, !=, <, <=, >, >= and AND/OR/NOT, RETURN variables and properties, count(*), count(var), collect(var), AS aliases, DISTINCT, ORDER BY, LIMIT. Labels available: Chunk, Code, File. Relationships available: REFERENCES, CONTAINS. Introspection: CALL db.labels().',
+      'Run a Cypher query on the code graph and return matching chunks. Supported (subset): CREATE, MATCH (node-only or single hop), labels (:Label) and inline property filters, WHERE with =, !=, <, <=, >, >= and AND/OR/NOT, RETURN variables and properties, count(*), count(var), collect(var), AS aliases, DISTINCT, ORDER BY, LIMIT. Labels: Chunk, Code, File. Relationships: REFERENCES, CONTAINS. Introspection: CALL db.labels(). Note: chunks are extracted from returned node values. If you return only scalar properties (e.g., d.filePath), the tool will resolve filePath strings to their file chunks; returning node variables (e.g., RETURN d) is still recommended.',
     parameters: z.object({ cypher: z.string() }),
     execute: async ({ cypher }) => {
       const rows = self['graph'].run(cypher)

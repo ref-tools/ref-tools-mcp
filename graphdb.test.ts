@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { GraphDB } from './graphdb'
+import { GraphDB, rowsToChunks } from './graphdb'
 import type { Node, Relationship } from './graphdb'
 
 function isNode(x: any): x is Node {
@@ -242,6 +242,36 @@ describe('GraphDB - function projections', () => {
     expect(Array.isArray(res[0].labels)).toBe(true)
     // labels should be arrays of strings for nodes
     expect(res[0].labels.every((x: any) => typeof x === 'string')).toBe(true)
+  })
+})
+
+describe('GraphDB - rowsToChunks maps property-only returns', () => {
+  it('maps d.filePath strings to the corresponding file chunk', () => {
+    const db = new GraphDB()
+    // Create a file node with filePath
+    db.run("CREATE (d:File:Chunk {id:'X1', filePath:'/repo/src/graphdb.ts'})")
+    // Returning only the property should still map to the file chunk
+    const rows = db.run(
+      "MATCH (d:File:Chunk) WHERE d.filePath ENDS WITH 'graphdb.ts' RETURN DISTINCT d.filePath AS path",
+    )
+    // Build a minimal chunk list with a matching file chunk
+    const chunks = [
+      {
+        id: 'X1',
+        filePath: '/repo/src/graphdb.ts',
+        language: 'typescript',
+        type: 'file',
+        name: 'graphdb.ts',
+        line: 1,
+        endLine: 1,
+        content: '',
+        contentHash: 'h',
+        relations: [],
+      },
+    ] as any
+    const mapped = rowsToChunks(rows as any, chunks as any)
+    expect(mapped).toHaveLength(1)
+    expect(mapped[0].filePath).toBe('/repo/src/graphdb.ts')
   })
 })
 

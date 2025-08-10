@@ -285,9 +285,20 @@ export class GraphDB {
 // to the corresponding full Chunk objects from `allChunks` (by matching `id`).
 export function rowsToChunks(rows: any[], allChunks: Chunk[]): Chunk[] {
   const byId = new Map<string, Chunk>()
-  for (const c of allChunks) byId.set(c.id, c)
+  const byFilePath = new Map<string, Chunk>()
+  for (const c of allChunks) {
+    byId.set(c.id, c)
+    if (c.type === 'file') byFilePath.set(c.filePath, c)
+  }
   const out: Chunk[] = []
   const seen = new Set<string>()
+
+  const addChunk = (c: Chunk | undefined) => {
+    if (c && !seen.has(c.id)) {
+      seen.add(c.id)
+      out.push(c)
+    }
+  }
 
   const consider = (val: any) => {
     if (val && typeof val === 'object') {
@@ -296,11 +307,7 @@ export function rowsToChunks(rows: any[], allChunks: Chunk[]): Chunk[] {
         const labels = val.labels as Set<string>
         if (labels.has('Chunk')) {
           const id = String(val.properties.id || '')
-          const c = id ? byId.get(id) : undefined
-          if (c && !seen.has(c.id)) {
-            seen.add(c.id)
-            out.push(c)
-          }
+          addChunk(id ? byId.get(id) : undefined)
         }
       }
       // Arrays (e.g., collect())
@@ -311,6 +318,14 @@ export function rowsToChunks(rows: any[], allChunks: Chunk[]): Chunk[] {
       else {
         for (const k of Object.keys(val)) consider((val as any)[k])
       }
+    } else if (typeof val === 'string') {
+      // Map returned filePath strings to the corresponding file chunk
+      // This makes queries like `RETURN d.filePath` yield file chunks
+      const byPath = byFilePath.get(val)
+      if (byPath) addChunk(byPath)
+      // Also allow raw chunk ids to map directly
+      const byRawId = byId.get(val)
+      if (byRawId) addChunk(byRawId)
     }
   }
 
