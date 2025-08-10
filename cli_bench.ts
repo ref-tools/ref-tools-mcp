@@ -374,9 +374,8 @@ async function cmdRun() {
 async function cmdViz(mode?: 'quiet') {
   ensureDir(VIEWER_DIR)
   const htmlPath = path.join(VIEWER_DIR, 'index.html')
-  if (!fs.existsSync(htmlPath)) {
-    fs.writeFileSync(htmlPath, VIEWER_HTML)
-  }
+  // Always overwrite to pick up UI updates
+  fs.writeFileSync(htmlPath, VIEWER_HTML)
 
   // In quiet mode (used by run), just ensure files exist and return.
   if (mode === 'quiet') return
@@ -440,90 +439,126 @@ const VIEWER_HTML = `<!doctype html>
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Bench Results</title>
+    <title>Bench: Latency vs Repo Size</title>
     <style>
       :root { color-scheme: light dark; }
-      body { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, sans-serif; margin: 0; padding: 24px; }
-      h1 { font-size: 20px; margin: 0 0 12px; }
-      .row { display: flex; gap: 24px; align-items: flex-start; flex-wrap: wrap; }
-      .card { border: 1px solid rgba(127,127,127,.3); border-radius: 12px; padding: 16px; min-width: 320px; }
-      .muted { color: #888; font-size: 12px; }
-      table { border-collapse: collapse; width: 100%; font-size: 13px; }
-      th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid rgba(127,127,127,.2); }
-      .bar { height: 10px; background: linear-gradient(90deg, #6ee7b7, #3b82f6); border-radius: 6px; }
-      .bar-wrap { position: relative; height: 12px; background: rgba(127,127,127,.12); border-radius: 6px; overflow: hidden; }
-      .bar-mean { position: absolute; left: 0; top: 1px; bottom: 1px; background: linear-gradient(90deg, #60a5fa, #22d3ee); border-radius: 6px; }
-      .bar-err { position: absolute; top: 0; bottom: 0; background: rgba(0,0,0,.25); }
-      .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-      @media (max-width: 720px) { .grid { grid-template-columns: 1fr; } }
-      code { background: rgba(127,127,127,.12); padding: 1px 4px; border-radius: 4px; }
-      .section-title { font-weight: 600; margin: 12px 0 6px; }
-      .qrow { display: grid; grid-template-columns: 180px 1fr 120px; gap: 8px; align-items: center; padding: 4px 0; }
-      .qhead { font-size: 12px; color: #666; }
+      body { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, sans-serif; margin: 0; padding: 20px; }
+      h1 { font-size: 18px; margin: 0 0 10px; }
+      .muted { color: #888; font-size: 12px; margin-bottom: 10px; }
+      .controls { display: flex; gap: 12px; align-items: center; margin-bottom: 12px; }
+      select { padding: 4px 8px; font-size: 13px; }
+      #legend { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+      .chip { display:inline-flex; align-items:center; gap:6px; padding: 2px 6px; border-radius: 999px; font-size: 12px; border:1px solid rgba(127,127,127,.3) }
+      .dot { width:10px; height:10px; border-radius: 50%; display:inline-block }
+      svg { width: 100%; max-width: 1000px; height: 520px; background: rgba(127,127,127,.06); border-radius: 8px; }
+      .axis text { font-size: 11px; fill: currentColor; }
+      .axis line, .axis path { stroke: rgba(127,127,127,.6); stroke-width: 1; shape-rendering: crispEdges; }
     </style>
   </head>
   <body>
-    <h1>GraphDB vs SearchDB — Benchmarks</h1>
-    <div class="muted">Polls results every 2s. Drop new runs to update automatically.</div>
-    <div id="content"></div>
+    <h1>Latency vs Repo Size</h1>
+    <div class="muted">One line per query type. X: repo chunks, Y: mean latency (ms).</div>
+    <div class="controls">
+      <label>Dataset
+        <select id="dataset">
+          <option value="searchdb">SearchDB</option>
+          <option value="graphdb">GraphDB</option>
+        </select>
+      </label>
+      <div id="runMeta" class="muted"></div>
+    </div>
+    <svg id="chart" viewBox="0 0 1000 520"></svg>
+    <div id="legend"></div>
     <script>
       async function fetchJSON(p) { try { const r = await fetch(p + '?_=' + Date.now()); if (!r.ok) return null; return r.json(); } catch { return null } }
       function fmt(n){ return typeof n==='number'? n.toFixed(1): n }
-      function clamp01(x){ return Math.max(0, Math.min(1, x)) }
-      function renderBars(queries){
-        const entries = Object.entries(queries||{})
-        if (!entries.length) return '<div class="muted">No query data</div>'
-        const means = entries.map(([k,v])=>v.mean||0)
-        const maxMean = Math.max(...means, 1)
-        let html = ''
-        html += '<div class="qrow qhead"><div>Query</div><div>Latency (ms)</div><div>mean ± stdev</div></div>'
-        for (const [key, v] of entries){
-          const w = clamp01((v.mean||0)/maxMean)*100
-          const errL = clamp01(((v.mean - v.stdev)/maxMean))*100
-          const errW = clamp01((2*v.stdev)/maxMean)*100
-          html += '<div class="qrow">'
-          html += '<div>' + (v.label||key) + '</div>'
-          html += '<div class="bar-wrap"><div class="bar-mean" style="width:'+w+'%"></div>'
-          html += '<div class="bar-err" style="left:'+errL+'%; width:'+errW+'%"></div></div>'
-          html += '<div>' + fmt(v.mean) + ' ± ' + fmt(v.stdev) + '</div>'
-          html += '</div>'
+      const COLORS = ['#2563eb','#16a34a','#dc2626','#7c3aed','#db2777','#059669','#f59e0b','#0ea5e9','#a855f7','#ef4444']
+
+      function buildSeries(run, dataset){
+        const repos = (run?.repos||[]).slice().sort((a,b)=> (a.numChunks||0) - (b.numChunks||0))
+        const series = {} // label -> [{x,y, repo}]
+        for (const r of repos){
+          const q = (r[dataset]||{}).queries || {}
+          for (const [key, v] of Object.entries(q)){
+            const label = dataset==='graphdb' ? key : (v.label || key)
+            if (!series[label]) series[label] = []
+            series[label].push({ x: r.numChunks||0, y: (v.mean||0), repo: r.name })
+          }
         }
-        return html
+        return series
       }
+
+      function renderChart(series){
+        const svg = document.getElementById('chart')
+        const W = 1000, H = 520, PADL = 60, PADB = 40, PADT = 10, PADR = 10
+        const innerW = W - PADL - PADR, innerH = H - PADT - PADB
+        svg.innerHTML = ''
+        const allX = [], allY = []
+        for (const pts of Object.values(series)){
+          for (const p of pts){ allX.push(p.x); allY.push(p.y) }
+        }
+        const xMin = 0, xMax = Math.max(1, Math.max(...allX, 1))
+        const yMin = 0, yMax = Math.max(1, Math.max(...allY, 1))
+        const sx = (x)=> PADL + (x - xMin) / (xMax - xMin) * innerW
+        const sy = (y)=> H - PADB - (y - yMin) / (yMax - yMin) * innerH
+
+        const ns = 'http://www.w3.org/2000/svg'
+        function line(x1,y1,x2,y2,cls){ const el = document.createElementNS(ns,'line'); el.setAttribute('x1',x1); el.setAttribute('y1',y1); el.setAttribute('x2',x2); el.setAttribute('y2',y2); if (cls) el.setAttribute('class',cls); return el }
+        function text(x,y,t,anchor='middle'){ const el=document.createElementNS(ns,'text'); el.setAttribute('x',x); el.setAttribute('y',y); el.setAttribute('text-anchor',anchor); el.textContent=t; return el }
+        function path(d, color){ const el=document.createElementNS(ns,'path'); el.setAttribute('d',d); el.setAttribute('fill','none'); el.setAttribute('stroke',color); el.setAttribute('stroke-width','2'); return el }
+        function circle(x,y,color){ const el=document.createElementNS(ns,'circle'); el.setAttribute('cx',x); el.setAttribute('cy',y); el.setAttribute('r','3'); el.setAttribute('fill',color); return el }
+
+        // Axes
+        const gAxes = document.createElementNS(ns,'g'); gAxes.setAttribute('class','axis')
+        gAxes.appendChild(line(PADL, PADT, PADL, H-PADB))
+        gAxes.appendChild(line(PADL, H-PADB, W-PADR, H-PADB))
+        // Ticks
+        const xTicks = 5, yTicks = 5
+        for (let i=0;i<=xTicks;i++){
+          const t = xMin + i*(xMax-xMin)/xTicks
+          const X = sx(t); gAxes.appendChild(line(X, H-PADB, X, H-PADB+6))
+          const tx = text(X, H-PADB+18, String(Math.round(t))) ; gAxes.appendChild(tx)
+        }
+        for (let i=0;i<=yTicks;i++){
+          const t = yMin + i*(yMax-yMin)/yTicks
+          const Y = sy(t); gAxes.appendChild(line(PADL-6, Y, PADL, Y))
+          const ty = text(PADL-10, Y+4, String(Math.round(t)), 'end'); gAxes.appendChild(ty)
+        }
+        svg.appendChild(gAxes)
+
+        // Series
+        const labels = Object.keys(series)
+        labels.sort()
+        const legend = document.getElementById('legend'); legend.innerHTML = ''
+        labels.forEach((label, i)=>{
+          const color = COLORS[i % COLORS.length]
+          const pts = series[label].slice().sort((a,b)=>a.x-b.x)
+          if (!pts.length) return
+          let d = ''
+          for (let j=0;j<pts.length;j++){
+            const X = sx(pts[j].x), Y = sy(pts[j].y)
+            d += (j===0? 'M':' L') + X + ' ' + Y
+          }
+          svg.appendChild(path(d, color))
+          for (const p of pts){ svg.appendChild(circle(sx(p.x), sy(p.y), color)) }
+          const chip = document.createElement('div'); chip.className='chip'; chip.innerHTML = '<span class="dot" style="background:'+color+'"></span><span>'+label+'</span>'
+          legend.appendChild(chip)
+        })
+      }
+
       async function render(){
         const idx = await fetchJSON('../results/index.json')
-        const container = document.getElementById('content');
-        if (!idx || !idx.length) { container.innerHTML = '<p>No runs yet. Run <code>npm run bench:run</code>.</p>'; return }
+        const metaEl = document.getElementById('runMeta');
+        if (!idx || !idx.length) { metaEl.textContent = 'No runs yet. Run npm run bench:run'; return }
         const last = idx[idx.length-1]
+        metaEl.textContent = last.runId + ' • ' + last.startedAt + ' • iters: ' + last.iterations
         const run = await fetchJSON('../results/' + last.runId + '.json')
-        let html = ''
-        html += '<div class="row">'
-        html += '<div class="card"><div class="muted">Latest run</div>'
-        html += '<div><b>' + last.runId + '</b></div>'
-        html += '<div class="muted">' + last.startedAt + ' • iters: ' + last.iterations + '</div>'
-        html += '</div>'
-        html += '</div>'
-        html += '<div class="row">'
-        for (const r of last.repos) {
-          const maxBuild = Math.max(r.searchdb_index_ms||0, r.graphdb_build_ms||0, 1)
-          const repoFull = (run && run.repos || []).find(x=>x.name===r.name) || {}
-          html += '<div class="card" style="flex:1; min-width: 520px">'
-          html += '<div style="font-weight:600;margin-bottom:6px">' + r.name + '</div>'
-          html += '<div class="muted" style="margin-bottom:8px">chunks: ' + r.numChunks + '</div>'
-          html += '<div class="grid" style="margin-bottom:10px">'
-          html += '<div>SearchDB index: '+ fmt(r.searchdb_index_ms) +' ms<div class="bar" style="width:'+(r.searchdb_index_ms/maxBuild*100)+'%"></div></div>'
-          html += '<div>GraphDB build: '+ fmt(r.graphdb_build_ms) +' ms<div class="bar" style="width:'+(r.graphdb_build_ms/maxBuild*100)+'%"></div></div>'
-          html += '</div>'
-          html += '<div class="section-title">SearchDB Queries</div>'
-          html += renderBars((repoFull.searchdb||{}).queries)
-          html += '<div class="section-title">GraphDB Queries</div>'
-          html += renderBars((repoFull.graphdb||{}).queries)
-          html += '</div>'
-        }
-        html += '</div>'
-        container.innerHTML = html
+        const dataset = document.getElementById('dataset').value
+        const series = buildSeries(run, dataset)
+        renderChart(series)
       }
-      render(); setInterval(render, 2000)
+      document.getElementById('dataset').addEventListener('change', render)
+      render(); setInterval(render, 5000)
     </script>
   </body>
   </html>`
