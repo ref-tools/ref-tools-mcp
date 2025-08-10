@@ -144,8 +144,8 @@ function createServerInstance(mcpClient: string = 'unknown', sessionId?: string)
             },
           ] as any)
         : ([] as any)),
-      uiHelloTool,
-      generateUiTool,
+      // uiHelloTool,
+      // generateUiTool,
       visualizeCodeTool,
     ],
   }))
