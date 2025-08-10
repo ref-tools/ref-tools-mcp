@@ -428,7 +428,7 @@ export class SearchDB {
     }
 
     // Clear the line and print completion
-    process.stdout.write(`\rCompleted processing ${chunks.length} chunks\n`)
+    if (verbose) process.stdout.write(`\rCompleted processing ${chunks.length} chunks\n`)
   }
 
   async updateChunk(chunk: Chunk): Promise<void> {
