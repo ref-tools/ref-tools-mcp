@@ -4,7 +4,7 @@ import crypto from 'node:crypto'
 import { chunkCodebase, chunkFile, type Chunk } from './chunker'
 import { GraphDB } from './graphdb'
 import { SearchDB, type ChunkAnnotator, type RelevanceFilter } from './searchdb'
-import { pickChunks } from './pickdocs'
+// pickChunks is only used via pickChunksFilter when configured
 import { streamText, tool as aiTool } from 'ai'
 import { createOpenAI } from '@ai-sdk/openai'
 import { z } from 'zod'

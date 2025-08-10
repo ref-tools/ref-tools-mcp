@@ -7,7 +7,7 @@ import SearchAgent, {
   runAgentWithStreaming,
 } from './search_agent'
 import { makeOpenAIAnnotator } from './openai_searchdb'
-import { pickChunks, pickChunksFilter } from './pickdocs'
+import { pickChunksFilter } from './pickdocs'
 
 function usage() {
   return [

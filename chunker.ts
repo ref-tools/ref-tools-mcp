@@ -224,7 +224,10 @@ export async function chunkFile(
         content,
         contentHash: sha256Hex(content),
         parentId: parent?.chunkId,
-        relations: parent ? [{ type: 'contains', targetId: id }] : [],
+        // Relations are recorded on the parent chunk only. The child should not
+        // carry a self-referential CONTAINS edge. Parent->child edges are added
+        // immediately below.
+        relations: [],
       }
       // Attach relation on parent chunk
       const parentChunk = chunks.find((c) => c.id === parent?.chunkId)

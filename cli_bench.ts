@@ -41,15 +41,17 @@ function msBetween(start: bigint, end: bigint): number {
 }
 
 function median(arr: number[]): number {
+  if (arr.length === 0) return 0
   const a = [...arr].sort((x, y) => x - y)
   const m = Math.floor(a.length / 2)
-  return a.length % 2 ? a[m] : (a[m - 1] + a[m]) / 2
+  return a.length % 2 ? a[m]! : (a[m - 1]! + a[m]!) / 2
 }
 
 function p95(arr: number[]): number {
+  if (arr.length === 0) return 0
   const a = [...arr].sort((x, y) => x - y)
   const idx = Math.max(0, Math.min(a.length - 1, Math.floor(0.95 * (a.length - 1))))
-  return a[idx]
+  return a[idx]!
 }
 
 async function cmdSetup() {
@@ -92,7 +94,7 @@ function buildGraphForChunks(db: GraphDB, chunks: Chunk[]) {
   }
 
   // Build CREATE statements per file with variables for each chunk
-  for (const [fid, list] of byRootFile.entries()) {
+  for (const [, list] of byRootFile.entries()) {
     // map id -> var name
     const vars = new Map<string, string>()
     list.forEach((c, i) => vars.set(c.id, `v${i}`))
@@ -152,7 +154,8 @@ function summarize(times: number[], label: string): QueryResult {
   const n = Math.max(1, times.length)
   const mean = times.reduce((a, b) => a + b, 0) / n
   const variance =
-    times.reduce((acc, t) => acc + Math.pow(t - mean, 2), 0) / (times.length > 1 ? times.length - 1 : 1)
+    times.reduce((acc, t) => acc + Math.pow(t - mean, 2), 0) /
+    (times.length > 1 ? times.length - 1 : 1)
   const stdev = Math.sqrt(variance)
   const sem = stdev / Math.sqrt(n)
   const ci95 = 1.96 * sem
@@ -243,7 +246,21 @@ async function benchSearchDB(repoName: string, chunks: Chunk[], iterations = 5) 
 
   const queries: { [name: string]: QueryResult } = {}
   const qlist = queriesForRepo(repoName)
-  qlist.forEach((q, i) => (queries[`q${i + 1}`] = { label: q, times: [], mean: 0, median: 0, p95: 0, stdev: 0, sem: 0, ci95: 0, min: 0, max: 0 }))
+  qlist.forEach(
+    (q, i) =>
+      (queries[`q${i + 1}`] = {
+        label: q,
+        times: [],
+        mean: 0,
+        median: 0,
+        p95: 0,
+        stdev: 0,
+        sem: 0,
+        ci95: 0,
+        min: 0,
+        max: 0,
+      }),
+  )
   for (const [name, meta] of Object.entries(queries)) {
     const times: number[] = []
     for (let i = 0; i < iterations; i++) {
@@ -269,14 +286,38 @@ async function benchGraphDB(chunks: Chunk[], iterations = 5) {
   const statements: { name: string; cypher: string }[] = [
     { name: 'count_files', cypher: 'MATCH (f:File) RETURN count(f) AS count' },
     { name: 'count_chunks', cypher: 'MATCH (c:Chunk) RETURN count(c) AS count' },
-    { name: 'contains_edges', cypher: 'MATCH (a:File)-[:CONTAINS]->(b:Chunk) RETURN count(b) AS count' },
-    { name: 'large_chunks_50', cypher: 'MATCH (c:Chunk) WHERE c.lineCount >= 50 RETURN count(c) AS count' },
-    { name: 'large_chunks_200', cypher: 'MATCH (c:Chunk) WHERE c.lineCount >= 200 RETURN count(c) AS count' },
-    { name: 'js_chunks', cypher: "MATCH (c:Chunk) WHERE c.language = 'javascript' RETURN count(c) AS count" },
-    { name: 'ts_chunks', cypher: "MATCH (c:Chunk) WHERE c.language = 'typescript' RETURN count(c) AS count" },
-    { name: 'tsx_chunks', cypher: "MATCH (c:Chunk) WHERE c.language = 'tsx' RETURN count(c) AS count" },
-    { name: 'classes', cypher: "MATCH (c:Chunk) WHERE c.type = 'class_declaration' RETURN count(c) AS count" },
-    { name: 'methods', cypher: "MATCH (c:Chunk) WHERE c.type = 'method_definition' RETURN count(c) AS count" },
+    {
+      name: 'contains_edges',
+      cypher: 'MATCH (a:File)-[:CONTAINS]->(b:Chunk) RETURN count(b) AS count',
+    },
+    {
+      name: 'large_chunks_50',
+      cypher: 'MATCH (c:Chunk) WHERE c.lineCount >= 50 RETURN count(c) AS count',
+    },
+    {
+      name: 'large_chunks_200',
+      cypher: 'MATCH (c:Chunk) WHERE c.lineCount >= 200 RETURN count(c) AS count',
+    },
+    {
+      name: 'js_chunks',
+      cypher: "MATCH (c:Chunk) WHERE c.language = 'javascript' RETURN count(c) AS count",
+    },
+    {
+      name: 'ts_chunks',
+      cypher: "MATCH (c:Chunk) WHERE c.language = 'typescript' RETURN count(c) AS count",
+    },
+    {
+      name: 'tsx_chunks',
+      cypher: "MATCH (c:Chunk) WHERE c.language = 'tsx' RETURN count(c) AS count",
+    },
+    {
+      name: 'classes',
+      cypher: "MATCH (c:Chunk) WHERE c.type = 'class_declaration' RETURN count(c) AS count",
+    },
+    {
+      name: 'methods',
+      cypher: "MATCH (c:Chunk) WHERE c.type = 'method_definition' RETURN count(c) AS count",
+    },
   ]
   for (const { name, cypher } of statements) {
     const times: number[] = []
@@ -404,11 +445,15 @@ async function cmdViz(mode?: 'quiet') {
       }
       const ext = path.extname(fsPath).toLowerCase()
       const mime =
-        ext === '.html' ? 'text/html; charset=utf-8' :
-        ext === '.json' ? 'application/json; charset=utf-8' :
-        ext === '.js' ? 'text/javascript; charset=utf-8' :
-        ext === '.css' ? 'text/css; charset=utf-8' :
-        'application/octet-stream'
+        ext === '.html'
+          ? 'text/html; charset=utf-8'
+          : ext === '.json'
+            ? 'application/json; charset=utf-8'
+            : ext === '.js'
+              ? 'text/javascript; charset=utf-8'
+              : ext === '.css'
+                ? 'text/css; charset=utf-8'
+                : 'application/octet-stream'
       res.writeHead(200, { 'Content-Type': mime })
       fs.createReadStream(fsPath).pipe(res)
     } catch (e) {
@@ -427,7 +472,8 @@ async function cmdViz(mode?: 'quiet') {
   console.log(`Open viewer: ${url}`)
 
   // Try to open in default browser if possible
-  const opener = process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'start' : 'xdg-open'
+  const opener =
+    process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'start' : 'xdg-open'
   const res = spawnSync(opener, [url], { stdio: 'ignore' })
   if ((res as any).error) {
     console.log('Could not auto-open browser. Please open the URL above manually.')
