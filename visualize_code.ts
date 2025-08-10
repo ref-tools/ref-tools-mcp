@@ -18,7 +18,7 @@ type GraphSnapshot = {
 export const visualizeCodeTool: Tool = {
   name: 'visualize_code',
   description:
-    'Generates an HTML UI that visualizes or explains the codebase based on a prompt. If available, includes a snapshot of the in-memory code graph (nodes, relationships) as context.',
+    'Generates an HTML UI that visualizes or explains the codebase based on a prompt. The tool is already aware of the code graph (nodes, relationships) as context.',
   inputSchema: {
     type: 'object',
     properties: {
@@ -59,11 +59,21 @@ export async function callVisualizeCode(args: {
     '- If the user references specific files in the prompt, reflect them clearly in the UI.',
   ].join('\n')
 
-  // Prepare graph context (stringified with a conservative truncation to avoid huge prompts)
-  const graphJson = args.graph ? safeStringify(args.graph, 200000) : null
-  const graphSection = graphJson
-    ? `\n\nGraphSnapshot JSON (may be truncated):\n\n\u003cGRAPH_JSON\u003e\n${graphJson}\n\u003c/GRAPH_JSON\u003e\n`
-    : '\n\nGraphSnapshot JSON: none available\n'
+  // Prepare graph context as YAML (conservative truncation to avoid huge prompts)
+  const graphYaml = args.graph ? safeYaml(args.graph, 200000) : null
+  if (graphYaml) {
+    // Debug preview to help troubleshoot prompt content
+    const preview =
+      graphYaml.length > 2000
+        ? graphYaml.slice(0, 2000) + '\n# ...(truncated preview)\n'
+        : graphYaml
+    console.error('[visualize_code] GraphSnapshot YAML preview (first 2KB):\n' + preview)
+  } else {
+    console.error('[visualize_code] GraphSnapshot not provided')
+  }
+  const graphSection = graphYaml
+    ? `\n\nGraphSnapshot YAML (may be truncated):\n\n\u003cGRAPH_YAML\u003e\n${graphYaml}\n\u003c/GRAPH_YAML\u003e\n`
+    : '\n\nGraphSnapshot YAML: none available\n'
 
   const userInstruction = [
     args.title ? `Title: ${args.title}` : undefined,
@@ -135,12 +145,66 @@ resizeObserver.observe(document.documentElement);
 </html>`
 }
 
-function safeStringify(obj: any, maxLen: number): string {
+function safeYaml(obj: any, maxLen: number): string {
   try {
-    const s = JSON.stringify(obj)
+    const s = toYaml(obj)
     if (s.length <= maxLen) return s
-    return s.slice(0, maxLen) + `\n/* ...truncated ${s.length - maxLen} chars */`
+    return s.slice(0, maxLen) + `\n# ...truncated ${s.length - maxLen} chars`
   } catch {
-    return '[unstringifiable graph]'
+    return '# [unstringifiable graph]'
   }
+}
+
+function toYaml(value: any, indentLevel: number = 0, seen?: WeakSet<object>): string {
+  const indent = '  '.repeat(indentLevel)
+  const nextIndent = '  '.repeat(indentLevel + 1)
+  const localSeen = seen || new WeakSet<object>()
+
+  const type = typeof value
+  if (value === null || value === undefined) return 'null'
+  if (type === 'number' || type === 'bigint') return String(value)
+  if (type === 'boolean') return value ? 'true' : 'false'
+  if (type === 'string') return JSON.stringify(value)
+
+  if (Array.isArray(value)) {
+    if (value.length === 0) return '[]'
+    const items = value.map((item) => {
+      const rendered = toYaml(item, indentLevel + 1, localSeen)
+      const isMultiLine = /\n/.test(rendered)
+      if (isMultiLine)
+        return `${indent}- |\n${rendered
+          .split('\n')
+          .map((l) => `${indent}  ${l}`)
+          .join('\n')}`
+      return `${indent}- ${rendered}`
+    })
+    return items.join('\n')
+  }
+
+  if (type === 'object') {
+    if (localSeen.has(value)) return '"[Circular]"'
+    localSeen.add(value as object)
+    const keys = Object.keys(value as object)
+    if (keys.length === 0) return '{}'
+    keys.sort()
+    const lines: string[] = []
+    for (const key of keys) {
+      const v = (value as any)[key]
+      const rendered = toYaml(v, indentLevel + 1, localSeen)
+      const isPrimitive = !/\n/.test(rendered)
+      if (isPrimitive) lines.push(`${indent}${key}: ${rendered}`)
+      else {
+        lines.push(`${indent}${key}:`)
+        lines.push(
+          rendered
+            .split('\n')
+            .map((l) => `${nextIndent}${l}`)
+            .join('\n'),
+        )
+      }
+    }
+    return lines.join('\n')
+  }
+
+  return JSON.stringify(String(value))
 }

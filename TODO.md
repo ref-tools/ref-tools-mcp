@@ -61,8 +61,7 @@ https://github.com/ref-tools/ref-tools-mcp/pull/15
 [x] graph should show average of all qieries.  
 [x] improve the UI and make it more digest able across
 [x] optimize the shit out of searchdb https://github.com/ref-tools/ref-tools-mcp/pull/27
-- do this 3 times
-[] rewrite in rust with bindings (do on repeat)
+[] rewrite in rust with bindings (do on repeat) https://github.com/ref-tools/ref-tools-mcp/pull/28
 
 # demo script
 - i build ref tools, find context for coding agents, specializing in finding exactly the right tokens and nothing more

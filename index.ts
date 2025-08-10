@@ -20,7 +20,7 @@ import axios from 'axios'
 import { createServer } from 'http'
 import { randomUUID } from 'crypto'
 import { callUiHello } from './helloui.js'
-import { callGenerateUi } from './genui.js'
+import { callGenerateUi, generateUiTool } from './genui.js'
 import { visualizeCodeTool, callVisualizeCode } from './visualize_code.js'
 import SearchAgent, { SEARCH_GRAPH_DESCRIPTION, SEARCH_QUERY_DESCRIPTION } from './search_agent.js'
 import { makeOpenAIAnnotator } from './openai_searchdb.js'
@@ -145,7 +145,7 @@ function createServerInstance(mcpClient: string = 'unknown', sessionId?: string)
           ] as any)
         : ([] as any)),
       // uiHelloTool,
-      // generateUiTool,
+      generateUiTool,
       visualizeCodeTool,
     ],
   }))
