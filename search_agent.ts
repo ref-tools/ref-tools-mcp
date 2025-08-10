@@ -4,6 +4,7 @@ import crypto from 'node:crypto'
 import { chunkCodebase, chunkFile, type Chunk } from './chunker'
 import { GraphDB, rowsToChunks } from './graphdb'
 import { SearchDB, type ChunkAnnotator, type RelevanceFilter } from './searchdb'
+import { RustSearchDB } from './searchdb_rust'
 // pickChunks is only used via pickChunksFilter when configured
 import { streamText, tool as aiTool } from 'ai'
 import { createOpenAI } from '@ai-sdk/openai'
@@ -24,6 +25,7 @@ export type SearchAgentOptions = {
   useOpenAI?: boolean
   openaiApiKey?: string
   agentModel?: string // default: gpt-5
+  searchEngine?: 'ts' | 'rust' // default ts
 }
 
 export type QueryResult = { kind: 'graph'; chunks: Chunk[] } | { kind: 'search'; chunks: Chunk[] }
@@ -48,8 +50,17 @@ export class SearchAgent {
     private rootDir: string,
     private opts: SearchAgentOptions = {},
   ) {
-    // console.log('opts', opts)
-    this.db = new SearchDB({ annotator: opts.annotator, relevanceFilter: opts.relevanceFilter })
+    // Choose TS (default) or Rust-backed search DB
+    const engine = opts.searchEngine || 'ts'
+    if (engine === 'rust') {
+      // @ts-ignore types match the small surface we use
+      this.db = (new RustSearchDB({
+        annotator: opts.annotator,
+        relevanceFilter: opts.relevanceFilter,
+      }) as unknown) as SearchDB
+    } else {
+      this.db = new SearchDB({ annotator: opts.annotator, relevanceFilter: opts.relevanceFilter })
+    }
   }
 
   // -------- Public API --------

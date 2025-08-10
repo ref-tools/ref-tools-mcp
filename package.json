@@ -19,7 +19,8 @@
     "bench:run:small": "tsx cli_bench.ts run small",
     "bench:viz": "tsx cli_bench.ts viz",
     "pre-commit": "npm run check",
-    "prepublishOnly": "npm run build"
+    "prepublishOnly": "npm run build",
+    "build:native": "cargo build --manifest-path native/searchdb-rs/Cargo.toml --release && node -e \"const fs=require('fs'),p=require('path');const base='native/searchdb-rs/target/release';const files=['libsearchdb_native.so','libsearchdb_native.dylib','searchdb_native.dll'];for(const f of files){const src=p.join(base,f);if(fs.existsSync(src)){fs.mkdirSync('native',{recursive:true});fs.copyFileSync(src,'native/searchdb_native.node');console.log('Wrote native/searchdb_native.node from',src);process.exit(0);}}console.error('Built library not found in target/release');process.exit(1)\""
   },
   "bin": {
     "ref-tools-mcp": "./dist/index.cjs",

@@ -6,7 +6,7 @@ import { execSync, spawnSync } from 'node:child_process'
 import http from 'node:http'
 import { chunkCodebase, type Chunk } from './chunker'
 import { GraphDB } from './graphdb'
-import { SearchDB } from './searchdb'
+import { RustSearchDB as SearchDB } from './searchdb_rust'
 import { makeOpenAIAnnotator } from './openai_searchdb'
 import { pickChunksFilter } from './pickdocs'
 
