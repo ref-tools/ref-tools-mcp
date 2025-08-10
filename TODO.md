@@ -52,15 +52,28 @@ https://github.com/ref-tools/ref-tools-mcp/pull/15
 
 # visual results
 [x] Update SearchAgent to optionally be able to return a visual with mcp-ui 
-[] visualize tool that will take a prompt + automaitcally dump the entire graph into context
+[x] visualize tool that will take a prompt + automaitcally dump the entire graph into context https://github.com/ref-tools/ref-tools-mcp/pull/26
 
 # see how much it can improve itself
 [x] generate a bench mark test for each searchdb, graphdb (save results to a file, have a ui for viewing) https://github.com/ref-tools/ref-tools-mcp/pull/16
 [x] add more larger repos
 [x] graph should show average of all qieries.  
 [x] improve the UI and make it more digest able across
-[] optimize the shit out of in-memory systems
+[] optimize the shit out of searchdb
 - do this 3 times
 [] rewrite in rust with bindings (do on repeat)
 
+# demo script
+- i build ref tools, find context for coding agents, specializing in finding exactly the right tokens and nothing more
+- for this hackathons the goal is see what gpt5 can do so i decided to work on adding code-indexing to ref's mcp server
+- (show mcp tools) ref already has search_docs and readurl, we now add 
+- (demo in goose - look up searchdb and how it is used)
+- okay that's cool we built an mcp server to chunk and build a graph index. 
+- normally id use a server, turbopuffer,neo4j etc but the goal is test gpt5 so i had gpt5 implement the graph/text/vector dbs from scratch
+- now we have that, i wanted to see how good they were so i had gpt5 write a benchmark 
+- (demo benchmark) and now we have a bench mark
+- ...and ofcourse now we're optimizing, we have to rewrite everythign to rust. so gpt5 did that
 
+- gpt5 is supposed to be good at generating ui, there's one more tool i hid from you  (vizualize_codebase)
+- (demo vizuali) uses mcp-ui to show an html ui. this is entirely
+- everything here written with gpt5 between cursor and codex hosted by terragonlabs
