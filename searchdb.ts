@@ -403,18 +403,32 @@ export class SearchDB {
   }
   async addChunks(chunks: Chunk[]): Promise<void> {
     const batchSize = 10
+    const startTime = Date.now()
+
     for (let i = 0; i < chunks.length; i += batchSize) {
       const batch = chunks.slice(i, i + batchSize)
       const batchNumber = Math.floor(i / batchSize) + 1
+      const processed = i + batch.length
+
+      // Calculate time estimate
+      const elapsed = Date.now() - startTime
+      const rate = processed / elapsed // chunks per ms
+      const remaining = chunks.length - processed
+      const estimatedRemainingMs = remaining / rate
+      const estimatedRemainingMin = Math.ceil(estimatedRemainingMs / 60000)
 
       if (batchNumber % 10 === 0) {
-        console.log(
-          `Processing batch ${batchNumber}/${Math.ceil(chunks.length / batchSize)} (${i + batch.length}/${chunks.length} chunks)`,
+        const timeStr = estimatedRemainingMin > 0 ? ` (~${estimatedRemainingMin}m remaining)` : ''
+        process.stdout.write(
+          `\rProcessing batch ${batchNumber}/${Math.ceil(chunks.length / batchSize)} (${processed}/${chunks.length} chunks)${timeStr}`,
         )
       }
 
       await Promise.all(batch.map((c) => this.addChunk(c)))
     }
+
+    // Clear the line and print completion
+    process.stdout.write(`\rCompleted processing ${chunks.length} chunks\n`)
   }
 
   async updateChunk(chunk: Chunk): Promise<void> {
