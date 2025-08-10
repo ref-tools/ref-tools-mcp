@@ -249,22 +249,20 @@ impl SearchIndex {
   pub fn new() -> Self { Self { core: std::sync::Mutex::new(SearchIndexCore::new()) } }
 
   #[napi]
-  pub fn add_doc(&self, id: String, bm25_text: String, embedding: TypedArray) -> Result<()> {
-    let vec: Vec<f32> = typedarray_to_f32(&embedding)?;
+  pub fn add_doc(&self, id: String, bm25_text: String, embedding: Float32Array) -> Result<()> {
     let mut g = self.core.lock().unwrap();
     g.bm25.add(&id, &bm25_text);
-    g.vectors.add(&id, &vec);
+    g.vectors.add(&id, embedding.as_ref());
     Ok(())
   }
 
   #[napi]
-  pub fn update_doc(&self, id: String, bm25_text: String, embedding: TypedArray) -> Result<()> {
-    let vec: Vec<f32> = typedarray_to_f32(&embedding)?;
+  pub fn update_doc(&self, id: String, bm25_text: String, embedding: Float32Array) -> Result<()> {
     let mut g = self.core.lock().unwrap();
     // remove then add to keep bm25 in sync
     g.bm25.remove(&id);
     g.bm25.add(&id, &bm25_text);
-    g.vectors.update(&id, &vec);
+    g.vectors.update(&id, embedding.as_ref());
     Ok(())
   }
 
@@ -286,23 +284,21 @@ impl SearchIndex {
   }
 
   #[napi]
-  pub fn knn_top_k(&self, query_vec: TypedArray, k: u32) -> Result<Vec<PairIdScore>> {
-    let v: Vec<f32> = typedarray_to_f32(&query_vec)?;
+  pub fn knn_top_k(&self, query_vec: Float32Array, k: u32) -> Result<Vec<PairIdScore>> {
     let g = self.core.lock().unwrap();
     Ok(g
       .vectors
-      .top_k(&v, k as usize)
+      .top_k(query_vec.as_ref(), k as usize)
       .into_iter()
       .map(|(id, s)| PairIdScore { id, s: s as f64 })
       .collect())
   }
 
   #[napi]
-  pub fn union_candidates(&self, query: String, query_vec: TypedArray, bm25_k: u32, knn_k: u32) -> Result<Vec<String>> {
-    let v: Vec<f32> = typedarray_to_f32(&query_vec)?;
+  pub fn union_candidates(&self, query: String, query_vec: Float32Array, bm25_k: u32, knn_k: u32) -> Result<Vec<String>> {
     let g = self.core.lock().unwrap();
     let bm = g.bm25.top_k(&query, bm25_k as usize);
-    let knn = g.vectors.top_k(&v, knn_k as usize);
+    let knn = g.vectors.top_k(query_vec.as_ref(), knn_k as usize);
     let mut seen: HashSet<String> = HashSet::new();
     let mut out: Vec<String> = Vec::new();
     for (id, _) in bm.into_iter() {
@@ -315,16 +311,5 @@ impl SearchIndex {
   }
 }
 
-fn typedarray_to_f32(ta: &TypedArray) -> Result<Vec<f32>> {
-  match ta.value_type() {
-    TypedArrayType::Float32 => Ok(ta.into_value()?.into_value().to_vec()),
-    TypedArrayType::Float64 => Ok(ta.into_value()?.into_value().iter().map(|x| *x as f32).collect()),
-    TypedArrayType::Int32 => Ok(ta.into_value()?.into_value().iter().map(|x| *x as f32).collect()),
-    TypedArrayType::Uint32 => Ok(ta.into_value()?.into_value().iter().map(|x| *x as f32).collect()),
-    _ => Err(Error::new(
-      Status::InvalidArg,
-      format!("Unsupported typed array type: {:?}", ta.value_type()),
-    )),
-  }
-}
+// removed generic TypedArray helper in favor of concrete Float32Array with zero-copy slice access
 

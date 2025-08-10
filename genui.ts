@@ -92,14 +92,14 @@ function postHeight(h) {
 }
 
 // Ensure document has at least MIN_HEIGHT visually as well
-document.addEventListener('DOMContentLoaded', () => {
-  try {
-    if (document.documentElement) document.documentElement.style.minHeight = MIN_HEIGHT + 'px';
-    if (document.body) document.body.style.minHeight = MIN_HEIGHT + 'px';
-  } catch {}
-  // After initial render, request at least MIN_HEIGHT once to grow host frame
-  setTimeout(() => postHeight(MIN_HEIGHT), 60);
-});
+// document.addEventListener('DOMContentLoaded', () => {
+//   try {
+//     if (document.documentElement) document.documentElement.style.minHeight = MIN_HEIGHT + 'px';
+//     if (document.body) document.body.style.minHeight = MIN_HEIGHT + 'px';
+//   } catch {}
+//   // After initial render, request at least MIN_HEIGHT once to grow host frame
+//   setTimeout(() => postHeight(MIN_HEIGHT), 60);
+// });
 
 const resizeObserver = new ResizeObserver((entries) => {
   for (const entry of entries) {
@@ -125,7 +125,7 @@ resizeObserver.observe(document.documentElement);
     <style>
       :root { color-scheme: light dark; }
       body { font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, sans-serif; margin: 0; padding: 16px; min-height: 640px; }
-      .container { max-width: 720px; margin: 0 auto; min-height: 640px; }
+      .container { margin: 0 auto; min-height: 640px; }
     </style>
   </head>
   <body>

@@ -11,6 +11,9 @@ napi = { version = "2", features = ["napi4"] }
 napi-derive = "2"
 ahash = "0.8"
 
+[build-dependencies]
+napi-build = "2"
+
 [profile.release]
 codegen-units = 1
 opt-level = 3
