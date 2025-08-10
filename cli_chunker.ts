@@ -2,7 +2,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { chunkCodebase, type Chunk } from './chunker'
+import { chunkCodebase, chunkFile, type Chunk } from './chunker'
 
 export type CliFormat = 'json' | 'human'
 
@@ -11,16 +11,16 @@ function usage(): string {
     'code-chunker - chunk a codebase into function/class/file units',
     '',
     'Usage:',
-    '  code-chunker --root <dir> --out <file> [--format human|json] [options]',
-    '',
-    'Required:',
-    '  --out <file>         Output file path',
+    '  code-chunker --root <dir> [--out <file>] [--format human|json] [options]',
+    '  code-chunker --file <path> [--out <file>] [--format human|json] [options]',
     '',
     'Inputs:',
     '  --root <dir>         Root directory to scan (defaults to current working directory)',
+    '  --file <path>        Process a single file instead of scanning a directory',
     '',
     'Options:',
     '  --format <fmt>       Output format: "human" (default) or "json"',
+    '  --out <file>         Output file path (if omitted, prints to stdout)',
     '  --array              With --format json, write a JSON array instead of JSONL',
     '  --pretty             Pretty-print JSON output',
     '  --languages <list>   Comma-separated list of languages to enable',
@@ -28,10 +28,13 @@ function usage(): string {
     '  -h, --help           Show this help and exit',
     '',
     'Examples:',
+    '  code-chunker --root .',
     '  code-chunker --root . --out chunks.txt',
     '  code-chunker --root ./repo --out chunks.jsonl --format json',
     '  code-chunker --root ./repo --out chunks.json --format json --array --pretty',
     '  code-chunker --root ./repo --out ts-only.txt --languages typescript,tsx',
+    '  code-chunker --file ./src/index.ts --format json',
+    '  code-chunker --file ./src/index.ts --out single.jsonl --format json',
   ].join('\n')
 }
 
@@ -135,7 +138,8 @@ async function run() {
   }
 
   const root = (args.root as string) || process.cwd()
-  const out = args.out as string
+  const fileInput = args.file as string | undefined
+  const out = args.out as string | undefined
   const formatInput = (args.format as string) || 'human'
   const format = (formatInput === 'json' || formatInput === 'human' ? formatInput : undefined) as
     | CliFormat
@@ -145,25 +149,47 @@ async function run() {
   const pretty = !!args.pretty
   const languages = (args.languages as string | undefined)?.split(',').map((s) => s.trim())
 
-  if (!out) {
-    console.error('Error: Missing required --out <file>\n')
-    console.log(usage())
-    process.exit(2)
-  }
-
   if (!format) {
     console.error(`Error: Invalid --format ${JSON.stringify(formatInput)}\n`)
     console.log(usage())
     process.exit(2)
   }
 
-  const chunks = await chunkCodebase(root, { languages })
+  let chunks: Chunk[] = []
+  let relativeBase = root
+  if (fileInput) {
+    const absFile = path.resolve(fileInput)
+    if (!fs.existsSync(absFile) || !fs.statSync(absFile).isFile()) {
+      console.error(`Error: --file does not exist or is not a file: ${JSON.stringify(fileInput)}\n`)
+      console.log(usage())
+      process.exit(2)
+    }
+    const res = await chunkFile(absFile, { languages })
+    chunks = res ?? []
+    relativeBase = path.dirname(absFile)
+  } else {
+    chunks = await chunkCodebase(root, { languages })
+    relativeBase = root
+  }
 
   if (jsonMode) {
-    writeJsonChunks(out, chunks, { format: jsonArray ? 'array' : 'jsonl', pretty })
+    if (out) {
+      writeJsonChunks(out, chunks, { format: jsonArray ? 'array' : 'jsonl', pretty })
+    } else {
+      if (jsonArray) {
+        const prettySpaces = pretty ? 2 : undefined
+        console.log(JSON.stringify(chunks, null, prettySpaces))
+      } else {
+        for (const c of chunks) console.log(JSON.stringify(c))
+      }
+    }
   } else {
-    const text = toHumanReadable(chunks, { relativeTo: root })
-    fs.writeFileSync(out, text)
+    const text = toHumanReadable(chunks, { relativeTo: relativeBase })
+    if (out) {
+      fs.writeFileSync(out, text)
+    } else {
+      console.log(text)
+    }
   }
 }
 

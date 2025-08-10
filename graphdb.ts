@@ -1,13 +1,3 @@
-// Minimal in-memory Graph DB with a small Cypher subset
-// Supported:
-// - CREATE nodes/relationships: CREATE (a:Label {k:1})-[:TYPE {p:2}]->(b:Other)
-// - MATCH patterns: node-only or multi-hop relationship chains
-// - Labels and inline property filters in patterns
-// - WHERE with =, !=, <, <=, >, >= and AND/OR/NOT
-// - RETURN projections: variables, variable.property, count(*), count(var), collect(var)
-// - Aliasing via AS
-// - LIMIT
-
 export type Properties = Record<string, any>
 // Importing types only to avoid runtime coupling
 import type { Chunk } from './chunker'
@@ -277,6 +267,53 @@ export class GraphDB {
       rows.push(row)
     }
     return rows
+  }
+}
+
+// A lightweight representation of the current in-memory graph suitable for visualization
+export type GraphSnapshot = {
+  nodes: Array<{
+    id: number
+    labels: string[]
+    properties: Properties
+  }>
+  relationships: Array<{
+    id: number
+    type: string
+    from: number
+    to: number
+    properties: Properties
+  }>
+}
+
+// Extend GraphDB with a method to dump a terse view of the graph. This intentionally
+// excludes any bulky fields like `content` if present in properties, while keeping
+// enough metadata to render nodes/edges and tooltips.
+export interface GraphDB {
+  getGraph(): GraphSnapshot
+}
+
+GraphDB.prototype.getGraph = function getGraph(this: GraphDB): GraphSnapshot {
+  const stripContent = (props: Properties): Properties => {
+    if (!props) return {}
+    // Omit any `content` key if present
+    const { content, ...rest } = props as any
+    return { ...rest }
+  }
+
+  return {
+    nodes: (this as any).nodes.map((n: Node) => ({
+      id: n.id,
+      labels: Array.from(n.labels),
+      properties: stripContent(n.properties),
+    })),
+    relationships: (this as any).rels.map((r: Relationship) => ({
+      id: r.id,
+      type: r.type,
+      from: r.from,
+      to: r.to,
+      properties: stripContent(r.properties),
+    })),
   }
 }
 

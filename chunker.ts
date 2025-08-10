@@ -199,7 +199,8 @@ export async function chunkFile(
     parser.setLanguage(langCfg.language)
     // tree-sitter may throw "Invalid argument" for certain inputs; catch and return file-only chunk
     tree = parser.parse(source) as unknown as { rootNode: SyntaxNode }
-  } catch {
+  } catch (e) {
+    console.error(`Failed to parse ${filePath}`, e)
     // Return only the file chunk if parsing fails
     return chunks
   }

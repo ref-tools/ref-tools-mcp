@@ -53,11 +53,13 @@ https://github.com/ref-tools/ref-tools-mcp/pull/15
 
 # visual results
 [x] Update SearchAgent to optionally be able to return a visual with mcp-ui 
+[] dump the graph to visual
 
 
 # see how much it can improve itself
 [x] generate a bench mark test for each searchdb, graphdb (save results to a file, have a ui for viewing) https://github.com/ref-tools/ref-tools-mcp/pull/16
-[] add more larger repos
+[x] add more larger repos
+[] graph should show average of all qieries.  
 [] improve the UI and make it more digest able across
 [] optimize the shit out of in-memory systems
 - do this 3 times

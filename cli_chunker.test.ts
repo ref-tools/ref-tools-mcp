@@ -1,9 +1,9 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { chunkCodebase } from './chunker'
-import { readJsonChunks, writeJsonChunks, toHumanReadable } from './cli_chunker'
+import run, { readJsonChunks, writeJsonChunks, toHumanReadable } from './cli_chunker'
 
 function tmpDir(prefix = 'chunker-cli-') {
   return fs.mkdtempSync(path.join(os.tmpdir(), prefix))
@@ -61,5 +61,92 @@ describe('CLI helpers human mode', () => {
     expect(text).toMatch(/File: ./)
     expect(text).toMatch(/\• \[typescript\] /)
     expect(text.split('\n').length).toBeGreaterThan(1)
+  })
+})
+
+describe('CLI single-file mode (--file)', () => {
+  it('processes only the specified file and writes JSONL by default', async () => {
+    const dir = tmpDir()
+    const fileA = path.join(dir, 'a.js')
+    const fileB = path.join(dir, 'b.js')
+    fs.writeFileSync(fileA, `function a(x){ return x+1 }\n`)
+    fs.writeFileSync(fileB, `function b(y){ return y-1 }\n`)
+
+    const out = path.join(dir, 'chunks.jsonl')
+
+    const origArgv = process.argv.slice()
+    try {
+      process.argv = [
+        origArgv[0] || 'node',
+        __filename,
+        '--file',
+        fileA,
+        '--out',
+        out,
+        '--format',
+        'json',
+      ]
+      await run()
+    } finally {
+      process.argv = origArgv
+    }
+
+    expect(fs.existsSync(out)).toBe(true)
+    const chunks = readJsonChunks(out)
+    expect(chunks.length).toBeGreaterThan(0)
+    const absA = path.resolve(fileA)
+    // ensure all chunks are from the targeted file only
+    expect(new Set(chunks.map((c) => c.filePath))).toEqual(new Set([absA]))
+  })
+})
+
+describe('CLI stdout when --out omitted', () => {
+  it('prints human output to stdout by default', async () => {
+    const dir = tmpDir()
+    const file = path.join(dir, 'x.ts')
+    fs.writeFileSync(file, `export function f(){ return 1 }\n`)
+
+    const logs: string[] = []
+    const spy = vi.spyOn(console, 'log').mockImplementation((...args: any[]) => {
+      logs.push(args.join(' '))
+    })
+    const origArgv = process.argv.slice()
+    try {
+      process.argv = [origArgv[0] || 'node', __filename, '--root', dir]
+      await run()
+    } finally {
+      spy.mockRestore()
+      process.argv = origArgv
+    }
+
+    const output = logs.join('\n')
+    expect(output).toMatch(/File: ./)
+    expect(output).toMatch(/\• \[typescript\]/)
+  })
+
+  it('prints JSONL to stdout when --format json without --array', async () => {
+    const dir = tmpDir()
+    const file = path.join(dir, 'y.js')
+    fs.writeFileSync(file, `function g(){ return 2 }\n`)
+
+    const logs: string[] = []
+    const spy = vi.spyOn(console, 'log').mockImplementation((...args: any[]) => {
+      logs.push(args.join(' '))
+    })
+    const origArgv = process.argv.slice()
+    try {
+      process.argv = [origArgv[0] || 'node', __filename, '--file', file, '--format', 'json']
+      await run()
+    } finally {
+      spy.mockRestore()
+      process.argv = origArgv
+    }
+
+    expect(logs.length).toBeGreaterThan(0)
+    // Each call should be a JSON object line
+    for (const line of logs) {
+      const obj = JSON.parse(line)
+      expect(obj).toHaveProperty('filePath')
+    }
   })
 })
