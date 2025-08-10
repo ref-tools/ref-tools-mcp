@@ -577,7 +577,7 @@ const VIEWER_HTML = `<!doctype html>
   </head>
   <body>
     <h1>Latency vs Repo Size</h1>
-    <div class="muted">One dot per repo, error bars show 95% CI across queries. X: repo chunks, Y: mean latency (ms). Multiple experiments overlayed.</div>
+    <div class="muted">One dot per repo, error bars show 95% CI across queries. X: n_files, Y: mean latency (ms). Multiple experiments overlayed.</div>
     <div class="controls">
       <label>Dataset
         <select id="dataset">
@@ -630,7 +630,7 @@ const VIEWER_HTML = `<!doctype html>
           for (const r of repos){
             const agg = aggregateRepo(r, dataset)
             if (!series[label]) series[label] = []
-            series[label].push({ x: r.numChunks||0, y: agg.mean||0, err: agg.ci95||0, repo: r.name })
+            series[label].push({ x: r.numFiles||0, y: agg.mean||0, err: agg.ci95||0, repo: r.name })
           }
         }
         return series
@@ -673,6 +673,14 @@ const VIEWER_HTML = `<!doctype html>
           const Y = sy(t); gAxes.appendChild(line(PADL-6, Y, PADL, Y))
           const ty = text(PADL-10, Y+4, String(Math.round(t)), 'end'); gAxes.appendChild(ty)
         }
+        // Axis labels
+        const xMid = PADL + innerW/2
+        const yMid = PADT + innerH/2
+        const xLabel = text(xMid, H - 8, 'n_files')
+        gAxes.appendChild(xLabel)
+        const yLabel = text(PADL - 50, yMid, 'ms')
+        yLabel.setAttribute('transform', 'rotate(-90 ' + (PADL - 50) + ' ' + yMid + ')')
+        gAxes.appendChild(yLabel)
         svg.appendChild(gAxes)
 
         // Series
