@@ -390,11 +390,18 @@ export class SearchDB {
     this.bm25.add(chunk.id, bm25Text)
     this.vectors.add(chunk.id, embedding)
   }
-
   async addChunks(chunks: Chunk[]): Promise<void> {
     const batchSize = 10
     for (let i = 0; i < chunks.length; i += batchSize) {
       const batch = chunks.slice(i, i + batchSize)
+      const batchNumber = Math.floor(i / batchSize) + 1
+
+      if (batchNumber % 10 === 0) {
+        console.log(
+          `Processing batch ${batchNumber}/${Math.ceil(chunks.length / batchSize)} (${i + batch.length}/${chunks.length} chunks)`,
+        )
+      }
+
       await Promise.all(batch.map((c) => this.addChunk(c)))
     }
   }
