@@ -48,13 +48,13 @@ https://github.com/ref-tools/ref-tools-mcp/pull/15
 # connected mcp server
 [] require a REF_DIRECTORY and OPENAI_API_KEY env variables in config, otherwise don't setup these capabilites
 [] launch a SearchAgent in the directory
-[] tool search_deep_dive() to find info about the repo that calls search agent 
-[] tools search_code_text() and search_code_graph() for direct searches, have these just return 
+[] tools search_code_text() (reuse searchQuery) and search_code_graph() (reuse searchGraph) for direct searches, have these just return 
 
 # visual results
 [x] Update SearchAgent to optionally be able to return a visual with mcp-ui 
 [] dump the graph to visual
-
+[] tool search_deep_dive() to find info about the repo that calls search agent 
+[] visualize_repo() tool
 
 # see how much it can improve itself
 [x] generate a bench mark test for each searchdb, graphdb (save results to a file, have a ui for viewing) https://github.com/ref-tools/ref-tools-mcp/pull/16
