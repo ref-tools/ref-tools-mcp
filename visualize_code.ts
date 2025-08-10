@@ -6,7 +6,13 @@ import { openai } from '@ai-sdk/openai'
 // Lightweight snapshot shape imported structurally from graphdb without runtime import
 type GraphSnapshot = {
   nodes: Array<{ id: number; labels: string[]; properties: Record<string, any> }>
-  relationships: Array<{ id: number; type: string; from: number; to: number; properties: Record<string, any> }>
+  relationships: Array<{
+    id: number
+    type: string
+    from: number
+    to: number
+    properties: Record<string, any>
+  }>
 }
 
 export const visualizeCodeTool: Tool = {
@@ -16,17 +22,12 @@ export const visualizeCodeTool: Tool = {
   inputSchema: {
     type: 'object',
     properties: {
-      message: {
+      description: {
         type: 'string',
-        description:
-          'Prompt describing what to visualize about the codebase. Include specific file paths or patterns directly in this message if needed.',
-      },
-      title: {
-        type: 'string',
-        description: 'Optional page title for the visualization.',
+        description: 'Prompt describing what to visualize about the codebase.',
       },
     },
-    required: ['message'],
+    required: ['description'],
   },
 }
 
@@ -143,4 +144,3 @@ function safeStringify(obj: any, maxLen: number): string {
     return '[unstringifiable graph]'
   }
 }
-
