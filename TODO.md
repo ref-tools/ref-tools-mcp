@@ -60,7 +60,7 @@ https://github.com/ref-tools/ref-tools-mcp/pull/15
 [x] add more larger repos
 [x] graph should show average of all qieries.  
 [x] improve the UI and make it more digest able across
-[] optimize the shit out of searchdb
+[x] optimize the shit out of searchdb https://github.com/ref-tools/ref-tools-mcp/pull/27
 - do this 3 times
 [] rewrite in rust with bindings (do on repeat)
 

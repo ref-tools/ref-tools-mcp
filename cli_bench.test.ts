@@ -37,4 +37,13 @@ describe('selectRepos', () => {
     const repos = selectRepos()
     expect(repos.map((r) => r.name).sort()).toEqual(['axios', 'chalk'])
   })
+
+  it('viewer HTML includes checkbox container for runs', () => {
+    // Import the module file source to assert the embedded HTML contains our runs container
+    // We read the file directly to avoid executing it
+    const fs = require('fs') as typeof import('fs')
+    const src = fs.readFileSync(require('path').join(__dirname, 'cli_bench.ts'), 'utf8')
+    expect(src).toContain('<div id="runs" class="runs" role="group" aria-label="Runs"></div>')
+    expect(src).toContain("input.type = 'checkbox'")
+  })
 })

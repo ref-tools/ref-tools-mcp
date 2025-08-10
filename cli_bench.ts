@@ -585,9 +585,10 @@ const VIEWER_HTML = `<!doctype html>
           <option value="graphdb">GraphDB</option>
         </select>
       </label>
-      <label>Runs
-        <select id="runs" multiple size="4" title="Select one or more runs to display"></select>
-      </label>
+      <div style="display:flex; flex-direction:column; gap:6px;">
+        <div class="muted">Runs</div>
+        <div id="runs" class="runs" role="group" aria-label="Runs"></div>
+      </div>
       <div id="runMeta" class="muted"></div>
     </div>
     <svg id="chart" viewBox="0 0 1000 520"></svg>
@@ -713,24 +714,32 @@ const VIEWER_HTML = `<!doctype html>
       }
 
       function getSelectedRuns(){
-        const sel = document.getElementById('runs')
+        const container = document.getElementById('runs')
+        const boxes = container.querySelectorAll('input[type=checkbox]')
         const vals = []
-        for (const opt of sel.options){ if (opt.selected) vals.push(opt.value) }
+        for (const b of boxes){ if (b.checked) vals.push(b.value) }
         return new Set(vals)
       }
 
       function setRunOptions(labels){
-        const sel = document.getElementById('runs')
+        const container = document.getElementById('runs')
         const prev = getSelectedRuns()
-        // Rebuild options while preserving prior selections
-        sel.innerHTML = ''
+        // Rebuild checkboxes while preserving prior selections
+        container.innerHTML = ''
         for (const name of labels){
-          const opt = document.createElement('option')
-          opt.value = name
-          opt.textContent = name
-          // Default to selected if nothing previously chosen
-          opt.selected = prev.size ? prev.has(name) : true
-          sel.appendChild(opt)
+          const id = 'run_' + name.replace(/[^a-zA-Z0-9_-]/g,'_')
+          const label = document.createElement('label')
+          label.className = 'chip'
+          const input = document.createElement('input')
+          input.type = 'checkbox'
+          input.id = id
+          input.value = name
+          input.checked = prev.size ? prev.has(name) : true
+          const span = document.createElement('span')
+          span.textContent = name
+          label.appendChild(input)
+          label.appendChild(span)
+          container.appendChild(label)
         }
       }
 
