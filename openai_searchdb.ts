@@ -104,8 +104,16 @@ export function makeOpenAIAnnotator(opts: OpenAIAnnotatorOptions): ChunkAnnotato
       return value
     },
     async embed(text: string): Promise<number[]> {
-      // We do not cache query embeddings by default
-      return openaiEmbed(text)
+      const key = `q:${sha256Hex(text)}`
+      const hit = cache[key]
+      if (hit && Array.isArray(hit.embedding)) {
+        return hit.embedding
+      }
+      const embedding = await openaiEmbed(text)
+      // Store with empty description to share file with chunk cache
+      cache[key] = { description: '', embedding }
+      writeCache(cacheFile, cache)
+      return embedding
     },
   }
 }
