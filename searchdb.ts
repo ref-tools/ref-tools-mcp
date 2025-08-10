@@ -16,10 +16,23 @@ export type SearchOptions = {
 }
 
 function tokenize(text: string): string[] {
-  return text
-    .toLowerCase()
-    .split(/[^a-z0-9_]+/g)
-    .filter(Boolean)
+  // Lowercase once to avoid per-token lowercase work
+  const s = text.toLowerCase()
+  const out: string[] = []
+  const n = s.length
+  let start = -1
+  for (let i = 0; i < n; i++) {
+    const c = s.charCodeAt(i)
+    const isWord = (c >= 97 && c <= 122) || (c >= 48 && c <= 57) || c === 95
+    if (isWord) {
+      if (start === -1) start = i
+    } else if (start !== -1) {
+      out.push(s.slice(start, i))
+      start = -1
+    }
+  }
+  if (start !== -1) out.push(s.slice(start))
+  return out
 }
 
 function cosine(a: number[], b: number[]): number {
@@ -39,9 +52,9 @@ function cosine(a: number[], b: number[]): number {
 }
 
 class BM25Index {
-  private df = new Map<string, number>()
-  private tf = new Map<string, Map<string, number>>() // docId -> term -> tf
+  private postings = new Map<string, Map<string, number>>() // term -> (docId -> tf)
   private docLen = new Map<string, number>()
+  private docTerms = new Map<string, string[]>() // docId -> unique terms present
   private totalLen = 0
   private docs = new Set<string>()
 
@@ -53,57 +66,301 @@ class BM25Index {
   add(docId: string, text: string) {
     const terms = tokenize(text)
     const len = terms.length
+    if (len === 0) return
     const tfMap = new Map<string, number>()
     for (const t of terms) tfMap.set(t, (tfMap.get(t) || 0) + 1)
-    this.tf.set(docId, tfMap)
+    const uniq: string[] = []
+    for (const term of tfMap.keys()) uniq.push(term)
+    for (const [term, tf] of tfMap) {
+      let post = this.postings.get(term)
+      if (!post) this.postings.set(term, (post = new Map()))
+      post.set(docId, tf)
+    }
     this.docLen.set(docId, len)
     this.totalLen += len
+    this.docTerms.set(docId, uniq)
     this.docs.add(docId)
-    // df increments once per doc per term
-    for (const term of new Set(terms)) this.df.set(term, (this.df.get(term) || 0) + 1)
   }
 
   remove(docId: string) {
-    const tfMap = this.tf.get(docId)
-    if (!tfMap) return
-    // adjust df
-    for (const term of tfMap.keys()) {
-      const v = (this.df.get(term) || 1) - 1
-      if (v <= 0) this.df.delete(term)
-      else this.df.set(term, v)
+    if (!this.docs.has(docId)) return
+    const terms = this.docTerms.get(docId)
+    if (terms) {
+      for (const term of terms) {
+        const post = this.postings.get(term)
+        if (!post) continue
+        post.delete(docId)
+        if (post.size === 0) this.postings.delete(term)
+      }
+    } else {
+      // Fallback: scan all postings (shouldn't happen)
+      for (const [, post] of this.postings) post.delete(docId)
     }
     const len = this.docLen.get(docId) || 0
     this.totalLen -= len
     this.docLen.delete(docId)
-    this.tf.delete(docId)
+    this.docTerms.delete(docId)
     this.docs.delete(docId)
   }
 
-  score(query: string): Map<string, number> {
-    const qTerms = Array.from(new Set(tokenize(query)))
+  topK(query: string, topK: number): Array<[string, number]> {
+    if (topK <= 0) return []
+    const qTermsArr = tokenize(query)
+    if (qTermsArr.length === 0) return []
+    const seen = new Set<string>()
+    const qTerms: string[] = []
+    for (const t of qTermsArr) if (!seen.has(t)) {
+      seen.add(t)
+      qTerms.push(t)
+    }
     const N = Math.max(1, this.docs.size)
     const avgdl = this.totalLen > 0 ? this.totalLen / N : 0.0001
     const scores = new Map<string, number>()
-    for (const [docId, tfMap] of this.tf.entries()) {
-      const dl = this.docLen.get(docId) || 0
-      let s = 0
-      for (const term of qTerms) {
-        const tf = tfMap.get(term) || 0
-        if (tf === 0) continue
-        const df = this.df.get(term) || 0
-        const idf = Math.log(1 + (N - df + 0.5) / (df + 0.5))
-        const denom = tf + this.k1 * (1 - this.b + (this.b * dl) / avgdl)
-        s += idf * ((tf * (this.k1 + 1)) / (denom || 1e-9))
+    const denomBaseCache = new Map<string, number>()
+    for (const term of qTerms) {
+      const post = this.postings.get(term)
+      if (!post) continue
+      const df = post.size
+      const idf = Math.log(1 + (N - df + 0.5) / (df + 0.5))
+      const mult = idf * (this.k1 + 1)
+      for (const [docId, tf] of post) {
+        let base = denomBaseCache.get(docId)
+        if (base === undefined) {
+          const dl = this.docLen.get(docId) || 0
+          base = this.k1 * (1 - this.b + (this.b * dl) / avgdl)
+          denomBaseCache.set(docId, base)
+        }
+        const denom = tf + base
+        const s = mult * (tf / (denom || 1e-9))
+        scores.set(docId, (scores.get(docId) || 0) + s)
       }
-      if (s !== 0) scores.set(docId, s)
     }
-    return scores
+    // min-heap selection
+    const heapIds: string[] = []
+    const heapS: number[] = []
+    const push = (id: string, s: number) => {
+      let i = heapIds.length
+      heapIds.push(id)
+      heapS.push(s)
+      while (i > 0) {
+        const p = (i - 1) >> 1
+        if (heapS[p] <= s) break
+        heapIds[i] = heapIds[p]
+        heapS[i] = heapS[p]
+        i = p
+      }
+      heapIds[i] = id
+      heapS[i] = s
+    }
+    const pop = () => {
+      const last = heapIds.length - 1
+      heapIds[0] = heapIds[last]
+      heapS[0] = heapS[last]
+      heapIds.pop()
+      heapS.pop()
+      let i = 0
+      const n = heapIds.length
+      while (true) {
+        const l = i * 2 + 1
+        const r = l + 1
+        if (l >= n) break
+        const si = r < n && heapS[r] < heapS[l] ? r : l
+        if (heapS[i] <= heapS[si]) break
+        const tid = heapIds[i]
+        const ts = heapS[i]
+        heapIds[i] = heapIds[si]
+        heapS[i] = heapS[si]
+        heapIds[si] = tid
+        heapS[si] = ts
+        i = si
+      }
+    }
+    for (const [id, s] of scores) {
+      if (heapIds.length < topK) push(id, s)
+      else if (s > heapS[0]) {
+        pop()
+        push(id, s)
+      }
+    }
+    const out: Array<[string, number]> = heapIds.map((id, i) => [id, heapS[i]])
+    out.sort((a, b) => b[1] - a[1])
+    return out
+  }
+
+  score(query: string): Map<string, number> {
+    const pairs = this.topK(query, Number.MAX_SAFE_INTEGER)
+    const m = new Map<string, number>()
+    for (const [id, s] of pairs) m.set(id, s)
+    return m
+  }
+}
+
+// High-performance exact cosine KNN over normalized Float32Array matrix
+class VectorIndex {
+  private dim = 0
+  private data = new Float32Array(0)
+  private ids: string[] = []
+  private idToRow = new Map<string, number>()
+  private qbuf: Float32Array | null = null
+
+  size(): number {
+    return this.ids.length
+  }
+
+  private ensureCapacity(rows: number, dim: number) {
+    if (this.dim === 0) this.dim = dim
+    const d = this.dim
+    const need = rows * d
+    if (need <= this.data.length) return
+    let cap = this.data.length || 1024
+    while (cap < need) cap *= 2
+    const next = new Float32Array(cap)
+    next.set(this.data)
+    this.data = next
+  }
+
+  add(id: string, vec: number[]) {
+    const d = this.dim || vec.length
+    this.ensureCapacity(this.ids.length + 1, d)
+    const row = this.ids.length
+    this.ids.push(id)
+    this.idToRow.set(id, row)
+    const off = row * this.dim
+    let sumsq = 0
+    for (let i = 0; i < this.dim; i++) {
+      const v = vec[i] ?? 0
+      this.data[off + i] = v
+      sumsq += v * v
+    }
+    const norm = sumsq > 0 ? 1 / Math.sqrt(sumsq) : 0
+    if (norm !== 1 && norm !== 0) {
+      for (let i = 0; i < this.dim; i++) this.data[off + i] *= norm
+    }
+  }
+
+  update(id: string, vec: number[]) {
+    const row = this.idToRow.get(id)
+    if (row === undefined) {
+      this.add(id, vec)
+      return
+    }
+    const off = row * this.dim
+    let sumsq = 0
+    for (let i = 0; i < this.dim; i++) {
+      const v = vec[i] ?? 0
+      this.data[off + i] = v
+      sumsq += v * v
+    }
+    const norm = sumsq > 0 ? 1 / Math.sqrt(sumsq) : 0
+    if (norm !== 1 && norm !== 0) {
+      for (let i = 0; i < this.dim; i++) this.data[off + i] *= norm
+    }
+  }
+
+  remove(id: string) {
+    const row = this.idToRow.get(id)
+    if (row === undefined) return
+    const last = this.ids.length - 1
+    if (row !== last) {
+      // swap remove
+      this.ids[row] = this.ids[last]
+      this.idToRow.set(this.ids[row], row)
+      const src = last * this.dim
+      const dst = row * this.dim
+      this.data.copyWithin(dst, src, src + this.dim)
+    }
+    this.ids.pop()
+    this.idToRow.delete(id)
+  }
+
+  topK(queryVec: number[], k: number): Array<{ id: string; s: number }> {
+    if (k <= 0 || this.ids.length === 0) return []
+    // build normalized query
+    const d = this.dim
+    if (!this.qbuf || this.qbuf.length !== d) this.qbuf = new Float32Array(d)
+    const q = this.qbuf
+    let sumsq = 0
+    for (let i = 0; i < d; i++) {
+      const v = queryVec[i] ?? 0
+      q[i] = v
+      sumsq += v * v
+    }
+    const norm = sumsq > 0 ? 1 / Math.sqrt(sumsq) : 0
+    if (norm !== 1 && norm !== 0) {
+      for (let i = 0; i < d; i++) q[i] *= norm
+    }
+
+    const heapIdx: number[] = []
+    const heapS: number[] = []
+    const push = (idx: number, s: number) => {
+      let i = heapIdx.length
+      heapIdx.push(idx)
+      heapS.push(s)
+      while (i > 0) {
+        const p = (i - 1) >> 1
+        if (heapS[p] <= s) break
+        heapIdx[i] = heapIdx[p]
+        heapS[i] = heapS[p]
+        i = p
+      }
+      heapIdx[i] = idx
+      heapS[i] = s
+    }
+    const pop = () => {
+      const last = heapIdx.length - 1
+      heapIdx[0] = heapIdx[last]
+      heapS[0] = heapS[last]
+      heapIdx.pop()
+      heapS.pop()
+      let i = 0
+      const n = heapIdx.length
+      while (true) {
+        const l = i * 2 + 1
+        const r = l + 1
+        if (l >= n) break
+        const si = r < n && heapS[r] < heapS[l] ? r : l
+        if (heapS[i] <= heapS[si]) break
+        const ti = heapIdx[i]
+        const ts = heapS[i]
+        heapIdx[i] = heapIdx[si]
+        heapS[i] = heapS[si]
+        heapIdx[si] = ti
+        heapS[si] = ts
+        i = si
+      }
+    }
+
+    const rows = this.ids.length
+    const data = this.data
+    for (let row = 0; row < rows; row++) {
+      const off = row * d
+      let dot = 0
+      let i = 0
+      const limit = d - (d % 4)
+      // unroll by 4
+      for (; i < limit; i += 4) {
+        dot += data[off + i] * q[i]
+        dot += data[off + i + 1] * q[i + 1]
+        dot += data[off + i + 2] * q[i + 2]
+        dot += data[off + i + 3] * q[i + 3]
+      }
+      for (; i < d; i++) dot += data[off + i] * q[i]
+      if (heapIdx.length < k) push(row, dot)
+      else if (dot > heapS[0]) {
+        pop()
+        push(row, dot)
+      }
+    }
+    const out = heapIdx.map((ri, i) => ({ id: this.ids[ri], s: heapS[i] }))
+    out.sort((a, b) => b.s - a.s)
+    return out
   }
 }
 
 export class SearchDB {
   private byId = new Map<string, AnnotatedChunk>()
   private bm25 = new BM25Index()
+  private vectors = new VectorIndex()
 
   constructor(
     private opts: {
@@ -131,6 +388,7 @@ export class SearchDB {
     this.byId.set(chunk.id, { ...chunk, description, embedding })
     const bm25Text = `${description}\n${chunk.content}`
     this.bm25.add(chunk.id, bm25Text)
+    this.vectors.add(chunk.id, embedding)
   }
 
   async addChunks(chunks: Chunk[]): Promise<void> {
@@ -150,6 +408,7 @@ export class SearchDB {
     if (!this.byId.has(id)) return
     this.byId.delete(id)
     this.bm25.remove(id)
+    this.vectors.remove(id)
   }
 
   async search(query: string, options: SearchOptions = {}): Promise<AnnotatedChunk[]> {
@@ -157,20 +416,14 @@ export class SearchDB {
     const bm25K = options.bm25K ?? 10
 
     // BM25 candidates
-    const bm25Scores = this.bm25.score(query)
-    const bm25Candidates = Array.from(bm25Scores.entries())
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, bm25K)
-      .map(([id]) => id)
+    const bm25Pairs = this.bm25.topK(query, bm25K)
+    const bm25Candidates = bm25Pairs.map(([id]) => id)
 
     // KNN candidates
     const annotator = this.opts.annotator || defaultAnnotator
     const qVec = await annotator.embed(query)
-    const knnCandidates = Array.from(this.byId.entries())
-      .map(([id, e]) => ({ id, s: cosine(qVec, e.embedding) }))
-      .sort((a, b) => b.s - a.s)
-      .slice(0, knnK)
-      .map((x) => x.id)
+    const knnPairs = this.vectors.topK(qVec, knnK)
+    const knnCandidates = knnPairs.map((x) => x.id)
 
     // Union
     const uniqueIds = Array.from(new Set([...bm25Candidates, ...knnCandidates]))
