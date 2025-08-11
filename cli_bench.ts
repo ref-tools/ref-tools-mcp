@@ -278,7 +278,7 @@ async function benchSearchDB(repoName: string, chunks: Chunk[], iterations = 1) 
       labelModel: 'gpt-5-nano',
       embedModel: 'text-embedding-3-small',
     }),
-    relevanceFilter: pickChunksFilter,
+    // relevanceFilter: pickChunksFilter,
   })
   const t0 = nowNs()
   console.log(`Starting to build index.`)

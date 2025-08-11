@@ -67,7 +67,7 @@ export class RustSearchDB {
     this.native.addDoc(chunk.id, bm25Text, emb)
   }
 
-  async addChunks(chunks: Chunk[]): Promise<void> {
+  async addChunks(chunks: Chunk[], _verbose = false): Promise<void> {
     const batchSize = 10
     for (let i = 0; i < chunks.length; i += batchSize) {
       const batch = chunks.slice(i, i + batchSize)
@@ -91,8 +91,8 @@ export class RustSearchDB {
   }
 
   async search(query: string, options: SearchOptions = {}): Promise<AnnotatedChunk[]> {
-    const knnK = options.knnK ?? 10
-    const bm25K = options.bm25K ?? 10
+    const knnK = options.knnK ?? 3
+    const bm25K = options.bm25K ?? 3
     const annotator = this.opts.annotator || defaultAnnotator
     const qVecArr = await annotator.embed(query)
     const qVec = Float32Array.from(qVecArr.map((x) => (Number.isFinite(x) ? x : 0)))
