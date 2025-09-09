@@ -1,7 +1,8 @@
 {
   "name": "ref-tools-mcp",
-  "version": "3.0.0",
+  "version": "3.0.1",
   "description": "ModelContextProtocol server for Ref",
+  "mcpName": "io.github.ref-tools/ref-tools-mcp",
   "type": "module",
   "module": "index.ts",
   "scripts": {
