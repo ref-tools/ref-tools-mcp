@@ -75,11 +75,14 @@ function createServerInstance(mcpClient: string = 'unknown', sessionId?: string)
       },
       required: ['query'],
     },
+    annotations: {
+      readOnlyHint: true,
+    },
   }
 
   const readTool: Tool = {
     name: toolConfig.readToolName,
-    description: `Read the content of a url as markdown. The entire exact URL from a Ref '${toolConfig.searchToolName}' result should be passed to this tool to read it.`,
+    description: `Read the content of a url as markdown. The EXACT url from a '${toolConfig.searchToolName}' result should be passed to this tool.`,
     inputSchema: {
       type: 'object',
       properties: {
@@ -89,6 +92,9 @@ function createServerInstance(mcpClient: string = 'unknown', sessionId?: string)
         },
       },
       required: ['url'],
+    },
+    annotations: {
+      readOnlyHint: true,
     },
   }
 
