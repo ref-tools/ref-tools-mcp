@@ -101,7 +101,7 @@ function createServerInstance(mcpClient: string = 'unknown', sessionId?: string)
   const server = new Server(
     {
       name: 'Ref',
-      version: '3.0.0',
+      version: '3.0.2',
     },
     {
       capabilities: {
@@ -111,6 +111,7 @@ function createServerInstance(mcpClient: string = 'unknown', sessionId?: string)
         tools: {},
         logging: {},
       },
+      instructions: `Use ref_search_documentation and ref_read_url when working with libraries, frameworks or APIs to check the docs.`,
     },
   )
 
