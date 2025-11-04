@@ -101,7 +101,7 @@ function createServerInstance(mcpClient: string = 'unknown', sessionId?: string)
   const server = new Server(
     {
       name: 'Ref',
-      version: '3.0.2',
+      version: '3.0.3',
     },
     {
       capabilities: {
