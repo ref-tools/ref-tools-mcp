@@ -279,6 +279,7 @@ async function doSearch(query: string, mcpClient: string = 'unknown', sessionId?
     const response = await axios.get(url, {
       headers: getAuthHeaders(sessionId),
     })
+
     const data = response.data
 
     if (data.docs.length === 0) {
@@ -308,6 +309,17 @@ moduleId: ${doc.moduleId || ''}`,
       }
     }
   } catch (error) {
+    if (axios.isAxiosError(error) && error.response?.status === 401) {
+      return {
+        content: [
+          {
+            type: 'text',
+            text: 'Please verify your email at https://ref.tools/dashboard to search documentation',
+          },
+        ],
+      }
+    }
+
     console.error('[search-error]', error)
     return {
       content: [
@@ -365,6 +377,17 @@ async function doRead(url: string, mcpClient: string = 'unknown', sessionId?: st
       }
     }
   } catch (error) {
+    if (axios.isAxiosError(error) && error.response?.status === 401) {
+      return {
+        content: [
+          {
+            type: 'text',
+            text: 'Please verify your email at https://ref.tools/dashboard to read URLs',
+          },
+        ],
+      }
+    }
+
     console.error('[read-error]', error)
     return {
       content: [
