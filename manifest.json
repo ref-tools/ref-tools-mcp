@@ -1,0 +1,21 @@
+{
+  "manifest_version": "0.3",
+  "name": "tools.ref/ref-tools-mcp",
+  "version": "3.0.3",
+  "description": "Token-efficient documentation search for AI coding agents",
+  "author": {
+    "name": "Ref Tools"
+  },
+  "server": {
+    "type": "node",
+    "entry_point": "dist/index.cjs",
+    "mcp_config": {
+      "command": "node",
+      "args": ["${__dirname}/dist/index.cjs"],
+      "env": {
+        "TRANSPORT": "http",
+        "PORT": "8000"
+      }
+    }
+  }
+}
