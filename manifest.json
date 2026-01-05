@@ -6,6 +6,22 @@
   "author": {
     "name": "Ref Tools"
   },
+  "user_config": {
+    "transport": {
+      "type": "string",
+      "title": "Transport Mode",
+      "description": "Server transport: stdio (default, for local use) or http (for cloud deployment)",
+      "required": false,
+      "default": "stdio"
+    },
+    "port": {
+      "type": "string",
+      "title": "HTTP Port",
+      "description": "Port for HTTP transport (only used when transport is http)",
+      "required": false,
+      "default": "8000"
+    }
+  },
   "server": {
     "type": "node",
     "entry_point": "dist/index.cjs",
@@ -13,8 +29,8 @@
       "command": "node",
       "args": ["${__dirname}/dist/index.cjs"],
       "env": {
-        "TRANSPORT": "http",
-        "PORT": "8000"
+        "TRANSPORT": "${user_config.transport}",
+        "PORT": "${user_config.port}"
       }
     }
   }
