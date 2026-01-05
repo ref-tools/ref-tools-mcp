@@ -3,6 +3,12 @@ name: Build MCPB Bundle
 on:
   release:
     types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to build (e.g., 3.0.4-beta.1)'
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -36,8 +42,12 @@ jobs:
 
       - name: Update manifest version
         run: |
-          VERSION="${{ github.event.release.tag_name }}"
-          VERSION="${VERSION#v}"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ inputs.version }}"
+          else
+            VERSION="${{ github.event.release.tag_name }}"
+            VERSION="${VERSION#v}"
+          fi
           jq --arg v "$VERSION" '.version = $v' manifest.json > manifest.tmp.json
           mv manifest.tmp.json manifest.json
 
