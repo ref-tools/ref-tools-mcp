@@ -1,0 +1,29 @@
+# Development and build artifacts
+.git/
+.github/
+.vscode/
+.idea/
+
+# Source files (dist/ contains compiled output)
+*.ts
+tsconfig.json
+
+# Package manager files
+package-lock.json
+
+# Config and metadata not needed at runtime
+smithery.yaml
+server.json
+Dockerfile
+.prettierrc
+.gitignore
+
+# Documentation and assets
+*.md
+*.png
+LICENSE
+
+# Test and cache files
+*.mcpb
+.env
+.env.*
