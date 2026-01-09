@@ -1,6 +1,6 @@
 {
   "manifest_version": "0.3",
-  "name": "tools.ref/ref-tools-mcp",
+  "name": "@ref-tools/ref-tools-mcp",
   "version": "3.0.3",
   "description": "Token-efficient documentation search for AI coding agents",
   "author": {
