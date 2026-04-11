@@ -12,7 +12,7 @@ For more see info [ref.tools](https://ref.tools)
 
 ## Agentic search for exactly the right context
 
-Ref's tools are design to match how models search while using as little context as possible to reduce [context rot](https://research.trychroma.com/context-rot). The goal is to find exactly the context your coding agent needs to be successful while using minimum tokens.
+Ref's tools are designed to match how models search while using as little context as possible to reduce [context rot](https://research.trychroma.com/context-rot). The goal is to find exactly the context your coding agent needs to be successful while using minimum tokens.
 
 Depending on the complexity of the prompt, LLM coding agents like Claude Code will typically do one or more searches and then choose a few resources to read in more depth.
 
