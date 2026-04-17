@@ -1,8 +1,0 @@
-{
-  "emulators": {
-    "firestore": {
-      "port": 8080,
-      "host": "localhost"
-    }
-  }
-}
