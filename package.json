@@ -25,14 +25,17 @@
   "dependencies": {
     "@modelcontextprotocol/inspector": "^0.16.1",
     "@modelcontextprotocol/sdk": "^1.0.3",
-    "axios": "^1.8.4"
+    "axios": "^1.8.4",
+    "firebase-admin": "^13.8.0"
   },
   "devDependencies": {
+    "@firebase/rules-unit-testing": "^5.0.0",
     "@types/node": "^22.10.1",
     "concurrently": "^8.2.2",
     "esbuild": "^0.24.0",
     "prettier": "^3.4.2",
     "tsx": "^4.19.4",
-    "typescript": "^5.3.3"
+    "typescript": "^5.3.3",
+    "vitest": "^4.1.4"
   }
 }
