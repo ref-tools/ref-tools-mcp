@@ -26,6 +26,8 @@
     "@modelcontextprotocol/inspector": "^0.16.1",
     "@modelcontextprotocol/sdk": "^1.0.3",
     "axios": "^1.8.4",
+    "commander": "^14.0.3",
+    "dotenv": "^17.4.2",
     "firebase-admin": "^13.8.0"
   },
   "devDependencies": {
