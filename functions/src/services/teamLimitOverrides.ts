@@ -4,6 +4,7 @@ import {
   type LimitType,
   LIMIT_TYPE_TO_CONFIG_FIELD,
 } from "../../../shared-common/tierLimits.js";
+import { getEnterpriseOverride } from "./enterpriseLimits.js";
 
 export interface TeamLimitOverrides {
   maxPlans?: number;
@@ -71,4 +72,22 @@ export async function getTeamLimitOverride(
 
   const field = LIMIT_TYPE_TO_CONFIG_FIELD[limitType];
   return (overrides as Record<string, unknown>)[field] as number | undefined;
+}
+
+/**
+ * Resolves the effective limit override for a team.
+ * Precedence: team override > enterprise override > undefined (caller applies tier default).
+ */
+export async function resolveLimitOverride(
+  db: Firestore,
+  _tier: string,
+  limitType: LimitType,
+  teamId: string,
+): Promise<number | "unlimited" | undefined> {
+  const teamOverride = await getTeamLimitOverride(db, teamId, limitType);
+  if (teamOverride !== undefined) {
+    return teamOverride;
+  }
+
+  return getEnterpriseOverride(db, teamId, limitType);
 }

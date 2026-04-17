@@ -5,6 +5,7 @@ import {
   setTeamLimitOverrides,
   clearTeamLimitOverrides,
   getTeamLimitOverride,
+  resolveLimitOverride,
 } from "./teamLimitOverrides.js";
 import type { Firestore } from "firebase-admin/firestore";
 
@@ -178,6 +179,89 @@ describe("teamLimitOverrides", () => {
       expect(result!.maxPdfPages).toBeUndefined();
       expect(result!.maxFileUploads).toBeUndefined();
       expect(result!.monthlyCredits).toBeUndefined();
+    });
+  });
+
+  describe("resolveLimitOverride", () => {
+    function seedEnterprise(
+      firestoreDb: Firestore,
+      teamId: string,
+      data: Record<string, unknown>,
+    ) {
+      return (firestoreDb as unknown as {
+        collection: (p: string) => {
+          doc: (id: string) => { set: (v: Record<string, unknown>, o?: { merge?: boolean }) => Promise<void> };
+        };
+      })
+        .collection("enterpriseAccounts")
+        .doc(teamId)
+        .set(data, { merge: true });
+    }
+
+    it("free-tier team with team override returns the override value", async () => {
+      const teamId = "free-team-1";
+      await setTeamLimitOverrides(db, teamId, { maxLargeRepos: 5 }, "admin-1");
+
+      const result = await resolveLimitOverride(db, "free", LimitType.MaxLargeRepos, teamId);
+      expect(result).toBe(5);
+    });
+
+    it("free-tier team with no override returns undefined", async () => {
+      const result = await resolveLimitOverride(
+        db,
+        "free",
+        LimitType.MaxLargeRepos,
+        "free-team-no-override",
+      );
+      expect(result).toBeUndefined();
+    });
+
+    it("enterprise team with both overrides — team override wins", async () => {
+      const teamId = "enterprise-team-both";
+      await seedEnterprise(db, teamId, { maxLargeRepos: 20 });
+      await setTeamLimitOverrides(db, teamId, { maxLargeRepos: 50 }, "admin-1");
+
+      const result = await resolveLimitOverride(
+        db,
+        "enterprise",
+        LimitType.MaxLargeRepos,
+        teamId,
+      );
+      expect(result).toBe(50);
+    });
+
+    it("enterprise team with no team override — enterprise override returned", async () => {
+      const teamId = "enterprise-team-ent-only";
+      await seedEnterprise(db, teamId, { maxLargeRepos: 20 });
+
+      const result = await resolveLimitOverride(
+        db,
+        "enterprise",
+        LimitType.MaxLargeRepos,
+        teamId,
+      );
+      expect(result).toBe(20);
+    });
+
+    it("team override for one limit doesn't affect a different limit", async () => {
+      const teamId = "team-cross-limit";
+      await setTeamLimitOverrides(db, teamId, { maxPlans: 10 }, "admin-1");
+
+      const plansResult = await resolveLimitOverride(
+        db,
+        "free",
+        LimitType.MaxPlans,
+        teamId,
+      );
+      expect(plansResult).toBe(10);
+
+      const reposResult = await resolveLimitOverride(
+        db,
+        "free",
+        LimitType.MaxLargeRepos,
+        teamId,
+      );
+      expect(reposResult).toBeUndefined();
     });
   });
 });
