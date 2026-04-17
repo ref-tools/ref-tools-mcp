@@ -3,3 +3,5 @@ node_modules
 .awolf
 .smithery
 .mcpregistry*
+firebase-debug.log
+firestore-debug.log
