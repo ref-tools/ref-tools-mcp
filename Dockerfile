@@ -5,7 +5,7 @@ FROM node:lts-alpine AS builder
 WORKDIR /app
 
 # Install dependencies and build
-COPY package.json package-lock.json tsconfig.json .
+COPY package.json package-lock.json tsconfig.json ./
 RUN npm ci --ignore-scripts
 COPY index.ts .
 RUN npm run build
@@ -15,7 +15,7 @@ FROM node:lts-alpine
 WORKDIR /app
 
 # Copy runtime dependencies
-COPY package.json package-lock.json .
+COPY package.json package-lock.json ./
 RUN npm ci --production --ignore-scripts
 
 # Copy built files
