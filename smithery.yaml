@@ -26,3 +26,10 @@ startCommand:
 build:
   dockerfile: "Dockerfile"
   dockerBuildPath: "."
+
+# Set transport mode for the Smithery.ai environment.
+# The Dockerfile no longer hardcodes TRANSPORT=http so that the image
+# defaults to stdio for Docker MCP Gateway / Gemini CLI consumers.
+# Smithery deploys still need HTTP, declared here at the platform layer.
+env:
+  TRANSPORT: "http"
