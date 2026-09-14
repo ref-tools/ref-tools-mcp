@@ -12,7 +12,6 @@ tsconfig.json
 package-lock.json
 
 # Config and metadata not needed at runtime
-smithery.yaml
 server.json
 Dockerfile
 .prettierrc
