@@ -23,8 +23,8 @@
     "dist"
   ],
   "dependencies": {
-    "@modelcontextprotocol/inspector": "^0.16.1",
-    "@modelcontextprotocol/sdk": "^1.0.3",
+    "@modelcontextprotocol/inspector": "^0.16.8",
+    "@modelcontextprotocol/sdk": "^1.26.0",
     "axios": "^1.8.4"
   },
   "devDependencies": {
