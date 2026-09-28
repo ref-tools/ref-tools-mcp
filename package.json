@@ -30,7 +30,7 @@
   "devDependencies": {
     "@types/node": "^22.10.1",
     "concurrently": "^8.2.2",
-    "esbuild": "^0.24.0",
+    "esbuild": "^0.25.12",
     "prettier": "^3.4.2",
     "tsx": "^4.19.4",
     "typescript": "^5.3.3"
