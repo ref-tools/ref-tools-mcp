@@ -2,7 +2,7 @@
 
 ## Reporting a vulnerability
 
-Please report suspected security vulnerabilities privately to **help@ref.tools** with "Security" in the subject line. Do not open a public GitHub issue, pull request, or discussion for a security report.
+Please report suspected security vulnerabilities privately to **security@ref.tools**. Do not open a public GitHub issue, pull request, or discussion for a security report.
 
 Include as much of the following as you can:
 
