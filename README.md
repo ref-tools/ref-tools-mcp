@@ -1,5 +1,5 @@
 [![Documentation for your agent](header.png)](https://ref.tools)
-[![smithery badge](https://smithery.ai/badge/@ref-tools/ref-tools-mcp)](https://smithery.ai/server/@ref-tools/ref-tools-mcp)
+[![Listed on Skillselion](https://skillselion.com/badge/mcp/tool/ai.smithery/ref-tools-ref-tools-mcp.svg)](https://skillselion.com/mcp/tool/ai.smithery/ref-tools-ref-tools-mcp)
 [![Website](https://img.shields.io/badge/Website-ref.tools-blue)](https://ref.tools)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![npm version](https://img.shields.io/npm/v/ref-tools-mcp)](https://www.npmjs.com/package/ref-tools-mcp)
