@@ -1,7 +1,0 @@
-[main] ls node_modules/@modelcontextprotocol
-inspector
-inspector-cli
-inspector-client
-inspector-server
-sdk
-[main] top-level packages:      190

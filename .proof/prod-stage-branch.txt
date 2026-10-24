@@ -1,8 +1,0 @@
-added 109 packages in 513ms
-$ ls node_modules/@modelcontextprotocol
-sdk
-$ ls node_modules | grep -ci inspector
-0
-$ ls node_modules | wc -l
-      99
-pong
