@@ -1,0 +1,24 @@
+ref-tools-mcp@3.0.3 /Users/matt/.ref/worktrees/local-tx5qomr435
+├─┬ @modelcontextprotocol/inspector@0.16.8
+│ ├─┬ @modelcontextprotocol/inspector-cli@0.16.8
+│ │ └── @modelcontextprotocol/sdk@1.31.0 deduped
+│ ├─┬ @modelcontextprotocol/inspector-client@0.16.8
+│ │ └── @modelcontextprotocol/sdk@1.31.0 deduped
+│ ├─┬ @modelcontextprotocol/inspector-server@0.16.8
+│ │ ├── @modelcontextprotocol/sdk@1.31.0 deduped
+│ │ └── shell-quote@1.10.0 deduped
+│ ├── @modelcontextprotocol/sdk@1.31.0 deduped
+│ ├─┬ concurrently@9.2.4
+│ │ └── shell-quote@1.9.0 deduped
+│ └── shell-quote@1.9.0
+├─┬ @modelcontextprotocol/sdk@1.31.0
+│ ├─┬ @hono/node-server@2.1.1
+│ │ └── hono@4.13.10 deduped
+│ ├─┬ express-rate-limit@8.7.0
+│ │ └── ip-address@10.7.2
+│ └── hono@4.13.10
+├─┬ axios@1.20.0
+│ └── follow-redirects@1.16.0
+└─┬ concurrently@8.2.2
+  └── shell-quote@1.10.0
+

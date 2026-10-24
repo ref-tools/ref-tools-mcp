@@ -1,0 +1,16 @@
+
+> ref-tools-mcp@3.0.3 build
+> esbuild index.ts --outfile=dist/index.cjs --bundle --platform=node --format=cjs --banner:js='#!/usr/bin/env node' && npm run make-executable
+
+
+  dist/index.cjs  1.3mb ⚠️
+
+⚡ Done in 22ms
+
+> ref-tools-mcp@3.0.3 make-executable
+> node -e "fs.chmodSync('dist/index.cjs', '755');" --require fs
+
+
+> ref-tools-mcp@3.0.3 check
+> tsc --noEmit
+

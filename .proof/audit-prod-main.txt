@@ -1,0 +1,80 @@
+# npm audit report
+
+@modelcontextprotocol/sdk  <=1.31.0
+Severity: high
+MCP TypeScript SDK: Experimental tasks were not tied to the session that created them - https://github.com/advisories/GHSA-22jm-h49p-29qw
+MCP TypeScript client SDK: HTTP client transports and OAuth requests followed cross-origin redirects and re-sent custom headers and request bodies - https://github.com/advisories/GHSA-6prh-2h8m-c8cw
+MCP TypeScript SDK: One HTTP request within the default size limit could exhaust server memory during validation - https://github.com/advisories/GHSA-46jr-4wx8-v453
+MCP TypeScript SDK: Server bearer authentication accepted tokens issued for another service - https://github.com/advisories/GHSA-rvq5-wwqv-78pq
+fix available via `npm audit fix`
+node_modules/@modelcontextprotocol/sdk
+
+body-parser  2.0.0 - 2.3.0
+Severity: high
+body-parser vulnerable to Denial of Service via trailing bytes after a compressed request body - https://github.com/advisories/GHSA-27r3-jxmh-p828
+fix available via `npm audit fix`
+node_modules/body-parser
+
+fast-uri  3.0.0 - 3.1.8
+Severity: moderate
+fast-uri vulnerable to URI scheme spoofing via percent-encoded scheme decoding - https://github.com/advisories/GHSA-w74x-v6f9-j3xg
+fast-uri vulnerable to improper path equivalence in relative reference normalization - https://github.com/advisories/GHSA-xhq7-xmqj-769h
+fast-uri vulnerable to host confusion via unchecked WHATWG host canonicalization - https://github.com/advisories/GHSA-wjr9-j795-jxcr
+fast-uri vulnerable to scheme injection via an unescaped first-segment colon in suffix references - https://github.com/advisories/GHSA-333x-w4r6-6crp
+fix available via `npm audit fix`
+node_modules/fast-uri
+
+follow-redirects  1.16.0
+Severity: high
+follow-redirects array-form headers bypass cross-origin credential stripping - https://github.com/advisories/GHSA-q3jh-wrc6-jgq8
+follow-redirects sensitiveHeaders regex escaping can expose credential headers - https://github.com/advisories/GHSA-8r9p-f939-6h3c
+fix available via `npm audit fix`
+node_modules/follow-redirects
+
+hono  4.12.4 - 4.13.10
+Severity: moderate
+Hono: `serveStatic` decodes the request path a second time, leading to bypass of middleware on static paths - https://github.com/advisories/GHSA-5r4p-p66f-jhc7
+fix available via `npm audit fix`
+node_modules/hono
+
+ip-address  <=10.7.3
+Severity: moderate
+ip-address: Address6 matches a zone identifier in quadratic time ahead of its length limit, allowing a single long string to stall the process - https://github.com/advisories/GHSA-rxp7-6hxx-x8q5
+fix available via `npm audit fix`
+node_modules/ip-address
+
+shell-quote  1.8.4 - 1.10.0
+Severity: critical
+shell-quote: `quote()` command injection via a line terminator in a token after a `{ comment }` token - https://github.com/advisories/GHSA-pqg4-j6r4-53mv
+fix available via `npm audit fix`
+node_modules/@modelcontextprotocol/inspector/node_modules/shell-quote
+node_modules/shell-quote
+  concurrently  9.2.3 - 9.2.4 || 10.0.0 - 10.0.5
+  Depends on vulnerable versions of shell-quote
+  node_modules/@modelcontextprotocol/inspector/node_modules/concurrently
+
+zod  <4.6.6
+Severity: high
+Zod can exhaust memory while validating oversized constrained collections - https://github.com/advisories/GHSA-mrhx-c7xc-m3w5
+fix available via `npm audit fix --force`
+Will install @modelcontextprotocol/inspector@2.12.0, which is a breaking change
+node_modules/zod
+  @modelcontextprotocol/inspector  <=1.0.3
+  Depends on vulnerable versions of @modelcontextprotocol/inspector-client
+  Depends on vulnerable versions of @modelcontextprotocol/inspector-server
+  Depends on vulnerable versions of zod
+  node_modules/@modelcontextprotocol/inspector
+  @modelcontextprotocol/inspector-client  *
+  Depends on vulnerable versions of zod
+  node_modules/@modelcontextprotocol/inspector-client
+  @modelcontextprotocol/inspector-server  *
+  Depends on vulnerable versions of zod
+  node_modules/@modelcontextprotocol/inspector-server
+
+12 vulnerabilities (3 moderate, 7 high, 2 critical)
+
+To address issues that do not require attention, run:
+  npm audit fix
+
+To address all issues (including breaking changes), run:
+  npm audit fix --force

@@ -1,0 +1,6 @@
+[stdio] tools: ref_read_url, ref_search_documentation
+[stdio] FAILED: ref_search_documentation returned an error: Please verify your email at https://ref.tools/dashboard to search documentation; ref_read_url returned an error: Please verify your email at https://ref.tools/dashboard to read URLs
+[http] GET /ping: 200 pong
+[http] tools: ref_read_url, ref_search_documentation
+[http] FAILED: ref_search_documentation returned an error: Please verify your email at https://ref.tools/dashboard to search documentation; ref_read_url returned an error: Please verify your email at https://ref.tools/dashboard to read URLs
+smoke: FAILED failed transports: stdio, http

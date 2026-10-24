@@ -14,7 +14,8 @@
     "dev": "concurrently \"npm run watch\" \"npm run inspect\"",
     "check": "tsc --noEmit",
     "pre-commit": "npm run check",
-    "prepublishOnly": "npm run build"
+    "prepublishOnly": "npm run build",
+    "smoke": "tsx scripts/smoke.ts"
   },
   "bin": {
     "ref-tools-mcp": "./dist/index.cjs"
@@ -23,16 +24,19 @@
     "dist"
   ],
   "dependencies": {
-    "@modelcontextprotocol/inspector": "^0.16.8",
-    "@modelcontextprotocol/sdk": "^1.26.0",
+    "@modelcontextprotocol/sdk": "^1.32.0",
     "axios": "^1.8.4"
   },
   "devDependencies": {
+    "@modelcontextprotocol/inspector": "^0.16.8",
     "@types/node": "^22.10.1",
     "concurrently": "^8.2.2",
     "esbuild": "^0.25.12",
     "prettier": "^3.4.2",
     "tsx": "^4.19.4",
     "typescript": "^5.3.3"
+  },
+  "overrides": {
+    "shell-quote": "^1.11.0"
   }
 }
