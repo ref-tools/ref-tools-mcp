@@ -1,11 +1,9 @@
 /**
  * @fileoverview Ref MCP server with documentation search and URL reading tools.
- * Supports stdio and HTTP transports with dynamic configuration.
  */
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
-import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
 import {
   CallToolRequestSchema,
   ErrorCode,
@@ -13,58 +11,25 @@ import {
   ListPromptsRequestSchema,
   GetPromptRequestSchema,
   McpError,
-  isInitializeRequest,
   type Tool,
 } from '@modelcontextprotocol/sdk/types.js'
 import axios from 'axios'
-import { createServer } from 'http'
 import { randomUUID } from 'crypto'
 
-// Tool configuration based on client type
-type ToolConfig = {
-  searchToolName: string
-  readToolName: string
+const SEARCH_TOOL_NAME = 'ref_search_documentation'
+const READ_TOOL_NAME = 'ref_read_url'
+
+if (process.env.TRANSPORT === 'http') {
+  console.error(
+    'HTTP mode was removed in ref-tools-mcp 4.0.0 (GHSA-jcmm-p959-xh5c). Connect to https://api.ref.tools/mcp instead.',
+  )
+  process.exit(1)
 }
 
-const OPENAI_DEEP_RESEARCH_TOOL_CONFIG: ToolConfig = {
-  searchToolName: 'search',
-  readToolName: 'fetch',
-}
-
-const DEFAULT_TOOL_CONFIG: ToolConfig = {
-  searchToolName: 'ref_search_documentation',
-  readToolName: 'ref_read_url',
-}
-
-// Transport configuration from environment
-const TRANSPORT_TYPE = (process.env.TRANSPORT || 'stdio') as 'stdio' | 'http'
-const HTTP_PORT = parseInt(process.env.PORT || '8080', 10)
-
-// Global variables to store current request config
-let currentApiKey: string | undefined = undefined
-
-// Session management for HTTP transport
-const transports: { [sessionId: string]: StreamableHTTPServerTransport } = {}
-const sessionClientInfo: { [sessionId: string]: string } = {}
-const servers: { [sessionId: string]: Server } = {}
-
-// DeepResearch shape for OpenAI compatibility
-type DeepResearchShape = {
-  id: string
-  title: string
-  text: string
-  url: string
-  metadata?: any
-}
-
-// Function to create a new server instance
-function createServerInstance(mcpClient: string = 'unknown', sessionId?: string) {
-  const toolConfig =
-    mcpClient === 'openai-mcp' ? OPENAI_DEEP_RESEARCH_TOOL_CONFIG : DEFAULT_TOOL_CONFIG
-
+function createMcpServer(sessionId?: string) {
   const searchTool: Tool = {
-    name: toolConfig.searchToolName,
-    description: `Search for documentation on the web or github as well from private resources like repos and pdfs. Use Ref '${toolConfig.readToolName}' to read the content of a url.`,
+    name: SEARCH_TOOL_NAME,
+    description: `Search for documentation on the web or github as well from private resources like repos and pdfs. Use Ref '${READ_TOOL_NAME}' to read the content of a url.`,
     inputSchema: {
       type: 'object',
       properties: {
@@ -81,8 +46,8 @@ function createServerInstance(mcpClient: string = 'unknown', sessionId?: string)
   }
 
   const readTool: Tool = {
-    name: toolConfig.readToolName,
-    description: `Read the content of a url as markdown. The EXACT url from a '${toolConfig.searchToolName}' result should be passed to this tool.`,
+    name: READ_TOOL_NAME,
+    description: `Read the content of a url as markdown. The EXACT url from a '${SEARCH_TOOL_NAME}' result should be passed to this tool.`,
     inputSchema: {
       type: 'object',
       properties: {
@@ -101,7 +66,7 @@ function createServerInstance(mcpClient: string = 'unknown', sessionId?: string)
   const server = new Server(
     {
       name: 'Ref',
-      version: '3.0.3',
+      version: '4.0.0',
     },
     {
       capabilities: {
@@ -115,7 +80,6 @@ function createServerInstance(mcpClient: string = 'unknown', sessionId?: string)
     },
   )
 
-  // Register request handlers
   server.setRequestHandler(ListToolsRequestSchema, async () => ({
     tools: [searchTool, readTool],
   }))
@@ -195,17 +159,17 @@ function createServerInstance(mcpClient: string = 'unknown', sessionId?: string)
   })
 
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
-    if (request.params.name === toolConfig.searchToolName) {
+    if (request.params.name === SEARCH_TOOL_NAME) {
       console.error('[search_documentation] arguments', request.params.arguments)
       const input = request.params.arguments as {
         query: string
       }
-      return doSearch(input.query, mcpClient, sessionId)
+      return doSearch(input.query, sessionId)
     }
 
-    if (request.params.name === toolConfig.readToolName) {
+    if (request.params.name === READ_TOOL_NAME) {
       const input = request.params.arguments as { url: string }
-      return doRead(input.url, mcpClient, sessionId)
+      return doRead(input.url, sessionId)
     }
 
     throw new McpError(ErrorCode.MethodNotFound, `Could not find tool: ${request.params.name}`)
@@ -225,20 +189,14 @@ const getRefUrl = () => {
   return 'https://api.ref.tools'
 }
 
-// Helper function to get API key from environment or current request
 const getApiKey = () => {
-  return process.env.REF_ALPHA || process.env.REF_API_KEY || currentApiKey
+  return process.env.REF_ALPHA || process.env.REF_API_KEY
 }
 
-// Helper function to get auth headers with session support
 const getAuthHeaders = (sessionId?: string) => {
   const headers: Record<string, string | undefined> = {
-    'X-Ref-Alpha':
-      process.env.REF_ALPHA ||
-      (currentApiKey && !process.env.REF_API_KEY ? currentApiKey : undefined),
-    'X-Ref-Api-Key':
-      process.env.REF_API_KEY ||
-      (currentApiKey && !process.env.REF_ALPHA ? currentApiKey : undefined),
+    'X-Ref-Alpha': process.env.REF_ALPHA,
+    'X-Ref-Api-Key': process.env.REF_API_KEY,
   }
 
   if (sessionId) {
@@ -248,19 +206,9 @@ const getAuthHeaders = (sessionId?: string) => {
   return headers
 }
 
-function toDeepResearchShape(doc: any): DeepResearchShape {
-  return {
-    id: doc.url,
-    title: doc.overview || doc.title || '',
-    text: (doc.content || '').slice(0, 100),
-    url: doc.url,
-    metadata: {
-      moduleId: doc.moduleId,
-    },
-  }
-}
+const missingKeyMessage = 'Ref is missing an API key. Reach out to hello@ref.tools for help.'
 
-async function doSearch(query: string, mcpClient: string = 'unknown', sessionId?: string) {
+async function doSearch(query: string, sessionId?: string) {
   const url = getRefUrl() + '/search_documentation?query=' + encodeURIComponent(query)
   console.error('[search]', url)
 
@@ -269,7 +217,7 @@ async function doSearch(query: string, mcpClient: string = 'unknown', sessionId?
       content: [
         {
           type: 'text',
-          text: 'Ref is not correctly configured. Reach out to hello@ref.tools for help.',
+          text: missingKeyMessage,
         },
       ],
     }
@@ -288,25 +236,13 @@ async function doSearch(query: string, mcpClient: string = 'unknown', sessionId?
       }
     }
 
-    // Return different formats based on client type
-    if (mcpClient === 'openai-mcp') {
-      return {
-        content: [
-          {
-            type: 'text' as const,
-            text: JSON.stringify(data.docs.map(toDeepResearchShape)),
-          },
-        ],
-      }
-    } else {
-      return {
-        content: data.docs.map((doc: any) => ({
-          type: 'text' as const,
-          text: `overview: ${doc.overview || ''}
+    return {
+      content: data.docs.map((doc: any) => ({
+        type: 'text' as const,
+        text: `overview: ${doc.overview || ''}
 url: ${doc.url}
 moduleId: ${doc.moduleId || ''}`,
-        })),
-      }
+      })),
     }
   } catch (error) {
     if (axios.isAxiosError(error) && error.response?.status === 401) {
@@ -332,7 +268,7 @@ moduleId: ${doc.moduleId || ''}`,
   }
 }
 
-async function doRead(url: string, mcpClient: string = 'unknown', sessionId?: string) {
+async function doRead(url: string, sessionId?: string) {
   try {
     const readUrl = getRefUrl() + '/read?url=' + encodeURIComponent(url)
     console.error('[read]', readUrl)
@@ -342,7 +278,7 @@ async function doRead(url: string, mcpClient: string = 'unknown', sessionId?: st
         content: [
           {
             type: 'text',
-            text: 'Ref is not correctly configured. Reach out to hello@ref.tools for help.',
+            text: missingKeyMessage,
           },
         ],
       }
@@ -354,27 +290,8 @@ async function doRead(url: string, mcpClient: string = 'unknown', sessionId?: st
 
     const data = response.data
 
-    // Return different formats based on client type
-    if (mcpClient === 'openai-mcp') {
-      const result: DeepResearchShape = {
-        id: url,
-        title: data.title || '',
-        text: data.content || '',
-        url,
-      }
-
-      return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify(result),
-          },
-        ],
-      }
-    } else {
-      return {
-        content: [{ type: 'text', text: data.content || '' }],
-      }
+    return {
+      content: [{ type: 'text', text: data.content || '' }],
     }
   } catch (error) {
     if (axios.isAxiosError(error) && error.response?.status === 401) {
@@ -401,177 +318,11 @@ async function doRead(url: string, mcpClient: string = 'unknown', sessionId?: st
 }
 
 async function main() {
-  const transportType = TRANSPORT_TYPE
-
-  if (transportType === 'http') {
-    const httpServer = createServer(async (req, res) => {
-      const url = new URL(req.url || '', `http://${req.headers.host}`).pathname
-
-      // Set CORS headers for all responses
-      res.setHeader('Access-Control-Allow-Origin', '*')
-      res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS,DELETE')
-      res.setHeader('Access-Control-Allow-Headers', 'Content-Type, MCP-Session-Id, mcp-session-id')
-
-      // Handle preflight OPTIONS requests
-      if (req.method === 'OPTIONS') {
-        res.writeHead(200)
-        res.end()
-        return
-      }
-
-      try {
-        if (url === '/mcp') {
-          // Extract client info
-          const userAgentHeader =
-            req.headers['user-agent'] || req.headers['x-mcp-client'] || req.headers['mcp-client']
-          const userAgent: string = Array.isArray(userAgentHeader)
-            ? userAgentHeader[0] || 'unknown'
-            : userAgentHeader || 'unknown'
-
-          // Get body for POST requests
-          let body: any = {}
-          if (req.method === 'POST') {
-            const chunks: Buffer[] = []
-            for await (const chunk of req) {
-              chunks.push(chunk)
-            }
-            const bodyString = Buffer.concat(chunks).toString()
-            try {
-              body = JSON.parse(bodyString)
-            } catch (e) {
-              // Ignore parse errors
-            }
-          }
-
-          const sessionId = req.headers['mcp-session-id'] as string | undefined
-          const mcpClient: string =
-            (sessionId && sessionClientInfo[sessionId]) ||
-            body?.params?.clientInfo?.name ||
-            userAgent.split('/')[0] ||
-            'unknown'
-
-          console.error('MCP REQUEST', {
-            headers: req.headers,
-            method: req.method,
-            url: req.url,
-            sessionId,
-            mcpClient,
-          })
-
-          // Extract config from base64-encoded JSON parameter for Smithery compatibility
-          const fullUrl = new URL(req.url || '', `http://${req.headers.host}`)
-          const configParam = fullUrl.searchParams.get('config')
-
-          if (configParam) {
-            try {
-              const decodedConfig = Buffer.from(configParam, 'base64').toString('utf-8')
-              const config = JSON.parse(decodedConfig)
-
-              if (config.refApiKey) {
-                currentApiKey = config.refApiKey
-              }
-            } catch (error) {
-              console.error('Failed to parse config parameter:', error)
-            }
-          }
-
-          if (req.method === 'POST') {
-            let transport: StreamableHTTPServerTransport
-
-            if (sessionId && transports[sessionId]) {
-              transport = transports[sessionId]
-            } else if (!sessionId && isInitializeRequest(body)) {
-              transport = new StreamableHTTPServerTransport({
-                sessionIdGenerator: () => randomUUID(),
-                enableJsonResponse: true,
-                onsessioninitialized: (newSessionId) => {
-                  sessionClientInfo[newSessionId] = mcpClient
-                  transports[newSessionId] = transport
-                  const server = createServerInstance(mcpClient, newSessionId)
-                  servers[newSessionId] = server
-                  server.connect(transport).catch(console.error)
-                },
-              })
-
-              transport.onclose = () => {
-                if (transport.sessionId) {
-                  delete transports[transport.sessionId]
-                  delete servers[transport.sessionId]
-                  delete sessionClientInfo[transport.sessionId]
-                }
-              }
-            } else {
-              res.writeHead(400, { 'Content-Type': 'application/json' })
-              res.end(
-                JSON.stringify({
-                  jsonrpc: '2.0',
-                  error: {
-                    code: -32000,
-                    message: 'Bad Request: No valid session ID provided',
-                  },
-                  id: null,
-                }),
-              )
-              return
-            }
-
-            await transport.handleRequest(req, res, body)
-          } else if (req.method === 'DELETE') {
-            console.log('DELETE request', transports[req.headers['mcp-session-id'] as string])
-            const sessionId = req.headers['mcp-session-id'] as string | undefined
-            if (sessionId && transports[sessionId]) {
-              await transports[sessionId].close()
-              console.log('closed transport', sessionId)
-              res.writeHead(200)
-              res.end()
-              return
-            } else {
-              res.writeHead(400, { 'Content-Type': 'application/json' })
-              res.end(
-                JSON.stringify({
-                  jsonrpc: '2.0',
-                  error: {
-                    code: -32000,
-                    message: 'Bad Request: No valid session ID provided',
-                  },
-                  id: null,
-                }),
-              )
-            }
-          } else {
-            res.writeHead(405, { 'Content-Type': 'application/json' })
-            res.end(JSON.stringify({ error: 'Method not allowed' }))
-          }
-        } else if (url === '/ping') {
-          res.writeHead(200, { 'Content-Type': 'text/plain' })
-          res.end('pong')
-        } else {
-          res.writeHead(404)
-          res.end('Not found')
-        }
-      } catch (error) {
-        console.error('Error handling request:', error)
-        if (!res.headersSent) {
-          res.writeHead(500)
-          res.end('Internal Server Error')
-        }
-      } finally {
-        // Clear config after request processing
-        currentApiKey = undefined
-      }
-    })
-
-    httpServer.listen(HTTP_PORT, () => {
-      console.error(`Ref MCP Server running on HTTP at http://localhost:${HTTP_PORT}/mcp`)
-    })
-  } else {
-    // Stdio transport (default)
-    const sessionId = randomUUID()
-    const server = createServerInstance('ref-tools-mcp-stdio', sessionId)
-    const transport = new StdioServerTransport()
-    await server.connect(transport)
-    console.error('Ref MCP Server running on stdio')
-  }
+  const sessionId = randomUUID()
+  const server = createMcpServer(sessionId)
+  const transport = new StdioServerTransport()
+  await server.connect(transport)
+  console.error('Ref MCP Server running on stdio')
 }
 
 process.on('SIGINT', async () => {
@@ -582,9 +333,3 @@ main().catch((error) => {
   console.error('Fatal error running server:', error)
   process.exit(1)
 })
-
-// Export the server for smithery
-export default function () {
-  const server = createServerInstance()
-  return server
-}
