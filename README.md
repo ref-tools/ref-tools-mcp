@@ -1,5 +1,4 @@
 [![Documentation for your agent](header.png)](https://ref.tools)
-[![smithery badge](https://smithery.ai/badge/@ref-tools/ref-tools-mcp)](https://smithery.ai/server/@ref-tools/ref-tools-mcp)
 [![Website](https://img.shields.io/badge/Website-ref.tools-blue)](https://ref.tools)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![npm version](https://img.shields.io/npm/v/ref-tools-mcp)](https://www.npmjs.com/package/ref-tools-mcp)
@@ -55,9 +54,9 @@ Imagine you are using Claude Opus as a background agent and you start by having 
 
 ## Setup
 
-There are two options for setting up Ref as an MCP server, either via the streamable-http server (recommended) or local stdio server (legacy). 
+There are two options for setting up Ref as an MCP server: the hosted streamable-http server (recommended) or this package's local stdio server (Docker below is a packaged form of the stdio option).
 
-This repo contains the legacy stdio server. 
+This repo contains the stdio server. Since 4.0.0 this package is stdio-only and `TRANSPORT=http` exits with an error; for HTTP, connect to `https://api.ref.tools/mcp`, which authenticates every caller (an `x-ref-api-key` header, `?apiKey=`, or OAuth).
 
 ### Streamable HTTP (recommended)
 
@@ -84,6 +83,16 @@ This repo contains the legacy stdio server.
 }
 ```
 
+### Docker
+
+Enable **Ref** in the Docker MCP Toolkit catalog. It runs the `mcp/ref-tools-mcp` image over stdio with `REF_API_KEY` supplied from Docker secrets.
+
+You can also run the image directly:
+
+```
+docker run --rm -i -e REF_API_KEY=<your-api-key> mcp/ref-tools-mcp
+```
+
 ## Tools
 
 Ref MCP server provides all the documentation related tools for your agent needs.
@@ -101,16 +110,6 @@ A tool that fetches content from a URL and converts it to markdown for easy read
 
 **Parameters:**
 - `url` (required): The URL of the webpage to read.
-
-
-## OpenAI deep research support
-
-Ref can be used as a source for deep research. OpenAI requires specific tool definitions so when used with an OpenAI client, Ref will provide the same tools with slightly different naming.
-
-```
-ref_search_documentation(query) -> search(query)
-ref_read_url(url) -> fetch(id)
-```
 
 ## Development
 
