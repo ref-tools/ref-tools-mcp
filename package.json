@@ -24,7 +24,7 @@
   ],
   "dependencies": {
     "@modelcontextprotocol/inspector": "^0.16.8",
-    "@modelcontextprotocol/sdk": "^1.26.0",
+    "@modelcontextprotocol/sdk": "1.32.0",
     "axios": "^1.8.4"
   },
   "devDependencies": {
@@ -34,5 +34,15 @@
     "prettier": "^3.4.2",
     "tsx": "^4.19.4",
     "typescript": "^5.3.3"
+  },
+  "overrides": {
+    "shell-quote": "1.11.0",
+    "@modelcontextprotocol/sdk": "1.32.0",
+    "follow-redirects": "1.16.2",
+    "body-parser": "2.4.0",
+    "zod": "4.6.6",
+    "hono": "4.13.11",
+    "ip-address": "10.7.5",
+    "@hono/node-server": "2.1.3"
   }
 }
